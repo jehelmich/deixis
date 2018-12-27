@@ -1,10 +1,11 @@
 package com.janhelmich.ar.smarthome;
 
 import android.content.Context;
-import android.support.design.widget.FloatingActionButton;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.ImageButton;
+import android.widget.RelativeLayout;
 
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.HitTestResult;
@@ -27,10 +28,11 @@ public class ARDevice extends Node implements Node.OnTapListener {
     private Quaternion lastCameraDirection;
     private Vector3 lastCameraPosition;
 
-    private FloatingActionButton up;
-    private FloatingActionButton down;
+    private ImageButton up;
+    private ImageButton down;
+    private RelativeLayout dPad;
 
-    public ARDevice(String id, Renderable model, Context context, FloatingActionButton up, FloatingActionButton down) {
+    public ARDevice(String id, Renderable model, Context context, ImageButton up, ImageButton down, RelativeLayout dPad) {
         super();
         this.model = model;
         this.context = context;
@@ -43,6 +45,7 @@ public class ARDevice extends Node implements Node.OnTapListener {
         movable = false;
 
         // Set floating action buttons
+        this.dPad = dPad;
         this.up = up;
         this.down = down;
     }
@@ -88,17 +91,15 @@ public class ARDevice extends Node implements Node.OnTapListener {
         infoCard.setEnabled(!infoCard.isEnabled());
 
         if (infoCard.isEnabled()) {
+            this.dPad.setVisibility(View.VISIBLE);
             up.setOnClickListener(v -> {
                 this.setLocalPosition(Vector3.add(this.getLocalPosition(), new Vector3(0.0f, 0.2f, 0.0f)));
             });
-            up.show();
             down.setOnClickListener(v -> {
                 this.setLocalPosition(Vector3.add(this.getLocalPosition(), new Vector3(0.0f, -0.2f, 0.0f)));
             });
-            down.show();
         } else {
-            up.hide();
-            down.hide();
+            this.dPad.setVisibility(View.INVISIBLE);
         }
     }
 

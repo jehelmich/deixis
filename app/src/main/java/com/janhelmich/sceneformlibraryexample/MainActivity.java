@@ -2,16 +2,16 @@ package com.janhelmich.sceneformlibraryexample;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Frame;
@@ -39,8 +39,11 @@ public class MainActivity extends AppCompatActivity {
 
     private ObjectConnector connector;
 
-    private FloatingActionButton up;
-    private FloatingActionButton down;
+    private ImageButton top;
+    private ImageButton left;
+    private ImageButton right;
+    private ImageButton bottom;
+    private RelativeLayout dPad;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,8 +67,13 @@ public class MainActivity extends AppCompatActivity {
 
         // Specify all remaining floating action buttons, so they can be passed to nodes
         // for on selected programming.
-        this.up = findViewById(R.id.arrow_up);
-        this.down = findViewById(R.id.arrow_down);
+        this.dPad = findViewById(R.id.d_pad);
+        this.top = findViewById(R.id.top);
+        this.bottom = findViewById(R.id.bottom);
+        this.left = findViewById(R.id.left);
+        this.right = findViewById(R.id.right);
+
+        this.dPad.setVisibility(RelativeLayout.INVISIBLE);
 
     }
 
@@ -211,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void addNodeToScene(ArFragment fragment, Anchor anchor, Renderable renderable) {
         AnchorNode anchorNode = new AnchorNode(anchor);
-        ARDevice node = new ARDevice("nodeName", renderable, this, this.up, this.down);
+        ARDevice node = new ARDevice("nodeName", renderable, this, this.top, this.bottom, this.dPad);
         node.setParent(anchorNode);
         fragment.getArSceneView().getScene().addChild(anchorNode);
 

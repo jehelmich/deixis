@@ -21,20 +21,11 @@
 
     <include layout="@layout/content_main" />
 
-    <android.support.design.widget.FloatingActionButton
-        android:id="@+id/arrow_down"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <include
+        layout="@layout/d_pad"
         android:layout_gravity="bottom|right"
-        android:layout_margin="@dimen/fab_margin"
-        app:srcCompat="@android:drawable/arrow_down_float" />
-
-    <android.support.design.widget.FloatingActionButton
-        android:id="@+id/arrow_up"
-        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|left"
-        android:layout_margin="16dp"
-        app:srcCompat="@android:drawable/arrow_up_float" />
+        android:layout_width="wrap_content"
+        android:layout_margin="24dp"/>
 
 </android.support.design.widget.CoordinatorLayout>
