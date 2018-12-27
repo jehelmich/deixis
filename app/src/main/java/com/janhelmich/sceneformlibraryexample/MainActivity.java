@@ -5,9 +5,11 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.Layout;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -29,6 +31,15 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class MainActivity extends AppCompatActivity {
+
+    public static final String MODE_USE = "MODE_USE";
+    public static final String MODE_EDIT = "MODE_EDIT";
+    /**
+     * Constants section for use in this class. First one is mode types for the Activity.
+     */
+
+
+
     private ArFragment fragment;
 
     private PointerDrawable pointer = new PointerDrawable();
@@ -38,6 +49,9 @@ public class MainActivity extends AppCompatActivity {
     private AnchorNode lastAnchor;
 
     private ObjectConnector connector;
+
+    private String mode;
+
 
     private ImageButton top;
     private ImageButton left;
@@ -64,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
         initializeGallery();
         connector = new ObjectConnector();
 
-
         // Specify all remaining floating action buttons, so they can be passed to nodes
         // for on selected programming.
         this.dPad = findViewById(R.id.d_pad);
@@ -74,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
         this.right = findViewById(R.id.right);
 
         this.dPad.setVisibility(RelativeLayout.INVISIBLE);
+
+        changeMode(this.MODE_EDIT);
 
     }
 
@@ -226,11 +241,21 @@ public class MainActivity extends AppCompatActivity {
         addAnchorLine(anchorNode);
     }
 
-
     private void addAnchorLine(AnchorNode a2) {
         if (lastAnchor != null) {
             connector.addLine(lastAnchor, a2, this);
         }
         lastAnchor = a2;
+    }
+
+    private void changeMode(String mode) {
+        if (mode != this.MODE_EDIT) {
+            this.dPad.setVisibility(RelativeLayout.INVISIBLE);
+            findViewById(R.id.gallery_layout).setVisibility(View.GONE);
+        } else {
+            this.dPad.setVisibility(RelativeLayout.VISIBLE);
+            findViewById(R.id.gallery_layout).setVisibility(View.VISIBLE);
+        }
+        this.mode = mode;
     }
 }
