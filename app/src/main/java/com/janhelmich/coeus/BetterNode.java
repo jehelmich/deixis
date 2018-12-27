@@ -1,4 +1,4 @@
-package com.janhelmich.sceneformlibraryexample;
+package com.janhelmich.coeus;
 
 import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.math.Quaternion;

@@ -11,7 +11,7 @@ import com.google.ar.sceneform.HitTestResult;
 import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.ViewRenderable;
-import com.janhelmich.sceneformlibraryexample.R;
+import com.janhelmich.coeus.R;
 
 public class ARInfoCard extends Node implements Node.OnTapListener {
 

@@ -1,4 +1,4 @@
-package com.janhelmich.sceneformlibraryexample;
+package com.janhelmich.coeus;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;

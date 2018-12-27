@@ -1,4 +1,4 @@
-package com.janhelmich.sceneformlibraryexample;
+package com.janhelmich.coeus;
 
 import org.junit.Test;
 
