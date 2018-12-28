@@ -1,53 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/d_pad"
+    android:id="@+id/control_pad"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content" >
 
     <ImageButton
-        android:id="@+id/top"
+        android:id="@+id/up"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="8dp"
         android:scaleX="2"
         android:scaleY="2"
-        app:srcCompat="@android:drawable/arrow_up_float"
-        android:layout_toRightOf="@id/left"/>
+        app:srcCompat="@android:drawable/arrow_up_float" />
 
     <ImageButton
-        android:id="@+id/left"
+        android:id="@+id/center"
+        android:visibility="invisible"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="8dp"
         android:scaleX="2"
         android:scaleY="2"
-        app:srcCompat="@android:drawable/arrow_up_float"
-        android:layout_below="@id/top"
-        android:rotation="270"/>
+        android:layout_below="@id/up"
+        app:srcCompat="@android:drawable/arrow_up_float" />
 
     <ImageButton
-        android:id="@+id/right"
+        android:id="@+id/down"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="8dp"
         android:scaleX="2"
         android:scaleY="2"
         app:srcCompat="@android:drawable/arrow_up_float"
-        android:layout_below="@id/top"
-        android:layout_toRightOf="@id/top"
-        android:rotation="90"/>
-
-    <ImageButton
-        android:id="@+id/bottom"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        android:scaleX="2"
-        android:scaleY="2"
-        app:srcCompat="@android:drawable/arrow_up_float"
-        android:layout_below="@id/left"
-        android:layout_toRightOf="@id/left"
+        android:layout_below="@id/center"
         android:rotation="180"/>
 
 

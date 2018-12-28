@@ -28,11 +28,9 @@ public class ARDevice extends Node implements Node.OnTapListener {
     private Quaternion lastCameraDirection;
     private Vector3 lastCameraPosition;
 
-    private ImageButton up;
-    private ImageButton down;
-    private RelativeLayout dPad;
+    private ThreeAxisController axisController;
 
-    public ARDevice(String id, Renderable model, Context context, ImageButton up, ImageButton down, RelativeLayout dPad) {
+    public ARDevice(String id, Renderable model, Context context, ThreeAxisController axisController) {
         super();
         this.model = model;
         this.context = context;
@@ -44,10 +42,7 @@ public class ARDevice extends Node implements Node.OnTapListener {
         selected = false;
         movable = false;
 
-        // Set floating action buttons
-        this.dPad = dPad;
-        this.up = up;
-        this.down = down;
+        this.axisController = axisController;
     }
 
     public void changeHeight(float height) {
@@ -91,15 +86,7 @@ public class ARDevice extends Node implements Node.OnTapListener {
         infoCard.setEnabled(!infoCard.isEnabled());
 
         if (infoCard.isEnabled()) {
-            this.dPad.setVisibility(View.VISIBLE);
-            up.setOnClickListener(v -> {
-                this.setLocalPosition(Vector3.add(this.getLocalPosition(), new Vector3(0.0f, 0.2f, 0.0f)));
-            });
-            down.setOnClickListener(v -> {
-                this.setLocalPosition(Vector3.add(this.getLocalPosition(), new Vector3(0.0f, -0.2f, 0.0f)));
-            });
-        } else {
-            this.dPad.setVisibility(View.INVISIBLE);
+            this.axisController.setObject(this);
         }
     }
 

@@ -24,6 +24,7 @@ import com.google.ar.sceneform.rendering.ModelRenderable;
 import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.ux.ArFragment;
 import com.janhelmich.ar.smarthome.ARDevice;
+import com.janhelmich.ar.smarthome.ThreeAxisController;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -51,11 +52,8 @@ public class MainActivity extends AppCompatActivity {
     private String mode;
 
 
-    private ImageButton top;
-    private ImageButton left;
-    private ImageButton right;
-    private ImageButton bottom;
-    private RelativeLayout dPad;
+    // The controls for the edit mode
+    private ThreeAxisController axisController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,15 +75,17 @@ public class MainActivity extends AppCompatActivity {
 
         // Specify all remaining floating action buttons, so they can be passed to nodes
         // for on selected programming.
-        this.dPad = findViewById(R.id.d_pad);
-        this.top = findViewById(R.id.top);
-        this.bottom = findViewById(R.id.bottom);
-        this.left = findViewById(R.id.left);
-        this.right = findViewById(R.id.right);
+        axisController = new ThreeAxisController(
+                findViewById(R.id.top),
+                findViewById(R.id.bottom),
+                findViewById(R.id.left),
+                findViewById(R.id.right),
+                findViewById(R.id.up),
+                findViewById(R.id.down),
+                findViewById(R.id.d_pad),
+                findViewById(R.id.control_pad));
 
-        this.dPad.setVisibility(RelativeLayout.INVISIBLE);
-
-        changeMode(this.MODE_EDIT);
+        changeMode(this.MODE_USE);
 
     }
 
@@ -236,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void addNodeToScene(ArFragment fragment, Anchor anchor, Renderable renderable) {
         AnchorNode anchorNode = new AnchorNode(anchor);
-        ARDevice node = new ARDevice("nodeName", renderable, this, this.top, this.bottom, this.dPad);
+        ARDevice node = new ARDevice("nodeName", renderable, this, axisController);
         node.setParent(anchorNode);
         fragment.getArSceneView().getScene().addChild(anchorNode);
 
@@ -252,11 +252,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void changeMode(String mode) {
         if (mode != this.MODE_EDIT) {
-            this.dPad.setVisibility(RelativeLayout.INVISIBLE);
-            findViewById(R.id.gallery_layout).setVisibility(View.GONE);
+            axisController.setInvisible();
+            this.findViewById(R.id.gallery_layout).setVisibility(View.GONE);
         } else {
-            this.dPad.setVisibility(RelativeLayout.VISIBLE);
-            findViewById(R.id.gallery_layout).setVisibility(View.VISIBLE);
+            axisController.setVisible();
+            this.findViewById(R.id.gallery_layout).setVisibility(View.VISIBLE);
         }
         this.mode = mode;
     }
