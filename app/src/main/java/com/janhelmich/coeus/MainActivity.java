@@ -49,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
 
     private ObjectConnector connector;
 
-    private String mode;
+    private static String mode = MODE_USE;
 
 
     // The controls for the edit mode
@@ -85,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
                 findViewById(R.id.d_pad),
                 findViewById(R.id.control_pad));
 
-        changeMode(this.MODE_USE);
+        changeMode(MODE_USE);
 
     }
 
@@ -159,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.change_mode) {
-            if (this.mode == MODE_USE) {
+            if (mode.equals(MODE_USE)) {
                 this.changeMode(MODE_EDIT);
             } else {
                 this.changeMode(MODE_USE);
@@ -251,13 +251,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void changeMode(String mode) {
-        if (mode != this.MODE_EDIT) {
+        if (!MainActivity.mode.equals(MODE_EDIT)) {
             axisController.setInvisible();
             this.findViewById(R.id.gallery_layout).setVisibility(View.GONE);
         } else {
             axisController.setVisible();
             this.findViewById(R.id.gallery_layout).setVisibility(View.VISIBLE);
         }
-        this.mode = mode;
+        MainActivity.mode = mode;
     }
+
+    public static String getMode() {
+        return MainActivity.mode;
+    }
+
 }

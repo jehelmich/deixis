@@ -13,6 +13,9 @@ import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Renderable;
+import com.janhelmich.coeus.MainActivity;
+
+import static com.janhelmich.coeus.MainActivity.MODE_USE;
 
 public class ARDevice extends Node implements Node.OnTapListener {
 
@@ -24,6 +27,9 @@ public class ARDevice extends Node implements Node.OnTapListener {
     private Node nodeVisual;
     private Node infoCard;
 
+    private Node useInfoCard;
+    private Node editInfoCard;
+    
     private boolean movable;
     private Quaternion lastCameraDirection;
     private Vector3 lastCameraPosition;
@@ -72,11 +78,19 @@ public class ARDevice extends Node implements Node.OnTapListener {
             nodeVisual.setOnTapListener(this);
         }
 
-        if (infoCard == null) {
-            infoCard = new ARDeviceInfoCard("TestDeviceName", "TestDeviceType", this.context);
-            infoCard.setParent(this);
-            infoCard.setEnabled(false);
+        if (useInfoCard == null) {
+            useInfoCard = new ARDeviceInfoCard("TestDeviceName", "USE CASE", this.context);
+            useInfoCard.setParent(this);
+            useInfoCard.setEnabled(false);
         }
+
+        if (editInfoCard == null) {
+            editInfoCard = new ARDeviceInfoCard("TestDeviceName", "EDIT CASE", this.context);
+            editInfoCard.setParent(this);
+            editInfoCard.setEnabled(false);
+        }
+
+        infoCard = useInfoCard;
     }
 
     @Override
@@ -122,6 +136,14 @@ public class ARDevice extends Node implements Node.OnTapListener {
             return;
         }
 
+        if (MainActivity.getMode().equals(MODE_USE)) {
+            infoCard = useInfoCard;
+            editInfoCard.setEnabled(false);
+        } else {
+            infoCard = editInfoCard;
+            useInfoCard.setEnabled(false);
+        }
+
         // If movable, keep consistent distance to camera and mirror its movement.
         if (movable) {
             if (lastCameraDirection != null) {
@@ -139,8 +161,6 @@ public class ARDevice extends Node implements Node.OnTapListener {
         }
         this.lastCameraDirection = getScene().getCamera().getWorldRotation();
         this.lastCameraPosition = getScene().getCamera().getWorldPosition();
-
-
 
     }
 }
