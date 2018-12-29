@@ -54,3 +54,8 @@ sceneform.asset('sampledata/models/igloo.obj',
         'default',
         'sampledata/models/igloo.sfa',
         'src/main/assets/igloo')
+
+sceneform.asset('sampledata/models/lightbulb.fbx',
+        'default',
+        'sampledata/models/lightbulb.sfa',
+        'src/main/assets/lightbulb')

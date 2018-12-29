@@ -49,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
 
     private ObjectConnector connector;
 
-    private static String mode = MODE_USE;
+    private static String mode;
 
 
     // The controls for the edit mode
@@ -85,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
                 findViewById(R.id.d_pad),
                 findViewById(R.id.control_pad));
 
+        MainActivity.mode = MODE_USE;
         changeMode(MODE_USE);
 
     }
@@ -196,6 +197,12 @@ public class MainActivity extends AppCompatActivity {
         igloo.setContentDescription("igloo");
         igloo.setOnClickListener(view ->{addObject(Uri.parse("igloo.sfb"));});
         gallery.addView(igloo);
+
+        ImageView lightbulb = new ImageView(this);
+        lightbulb.setImageResource(R.drawable.igloo_thumb);
+        lightbulb.setContentDescription("lightbulb");
+        lightbulb.setOnClickListener(view ->{addObject(Uri.parse("lightbulb.sfb"));});
+        gallery.addView(lightbulb);
     }
 
     private void addObject(Uri model) {
@@ -251,7 +258,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void changeMode(String mode) {
-        if (!MainActivity.mode.equals(MODE_EDIT)) {
+        if (MainActivity.mode.equals(MODE_USE)) {
             axisController.setInvisible();
             this.findViewById(R.id.gallery_layout).setVisibility(View.GONE);
         } else {
