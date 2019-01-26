@@ -104,7 +104,7 @@
             android:textAlignment="center"
             android:paddingTop="2dp" />
         <TextView
-            android:id="@+id/voltage"
+            android:id="@+id/brightness"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -122,7 +122,7 @@
     </LinearLayout>
 
     <SeekBar
-        android:id="@+id/seek_bar_blue"
+        android:id="@+id/brightness_seek_bar"
         android:max="254"
         android:progress="127"
         android:layout_width="match_parent"

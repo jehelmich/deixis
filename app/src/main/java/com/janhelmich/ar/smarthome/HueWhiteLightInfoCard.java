@@ -3,6 +3,7 @@ package com.janhelmich.ar.smarthome;
 import android.content.Context;
 import android.util.Log;
 import android.widget.CompoundButton;
+import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -25,9 +26,9 @@ public class HueWhiteLightInfoCard extends ARDeviceInfoCard implements Switch.On
     private int layout;
 
     static String authenticator = "Bearer ***REMOVED***";
-    static String base_url = "http://HA_HOST:8123/api/services/switch/toggle";
+    static String base_url = "http://HA_HOST:8123/api/services/light/toggle";
     static String states_url = "http://HA_HOST:8123/api/states/";
-    static String identifier = "switch.tplink";
+    static String identifier = "light.hue_white_lamp_1";
 
     private TextView deviceId;
     private TextView deviceName;
@@ -35,17 +36,13 @@ public class HueWhiteLightInfoCard extends ARDeviceInfoCard implements Switch.On
 
     private Switch deviceSwitch;
 
-    private TextView power;
-    private TextView current;
-    private TextView voltage;
-
-    private TextView energyToday;
-    private TextView energyTotal;
+    private TextView brightnessTextView;
+    private SeekBar brightnessSeekBar;
 
     public HueWhiteLightInfoCard(String deviceId, String type, Context context) {
         super(deviceId, type, context);
 
-        layout = R.layout.ar_switch_info;
+        layout = R.layout.ar_hue_white_light_info;
     }
 
     @Override
@@ -70,12 +67,8 @@ public class HueWhiteLightInfoCard extends ARDeviceInfoCard implements Switch.On
 
                             deviceSwitch = renderable.getView().findViewById(R.id.device_switch);
 
-                            power = renderable.getView().findViewById(R.id.power);
-                            current = renderable.getView().findViewById(R.id.current);
-                            voltage = renderable.getView().findViewById(R.id.voltage);
-
-                            energyToday = renderable.getView().findViewById(R.id.energy_today);
-                            energyTotal = renderable.getView().findViewById(R.id.energy_total);
+                            brightnessTextView = renderable.getView().findViewById(R.id.brightness);
+                            brightnessSeekBar = renderable.getView().findViewById(R.id.brightness_seek_bar);
 
                             // Make API call to see if the switch is actually switched on.
 
@@ -92,79 +85,45 @@ public class HueWhiteLightInfoCard extends ARDeviceInfoCard implements Switch.On
     }
 
 
-
     private void getDeviceInfo() {
 
         JsonObjectRequest jsonObjectRequest;
         jsonObjectRequest = new JsonObjectRequest
-                (Request.Method.GET, states_url+identifier, null, response -> {
-                    try {
-                        JSONObject attributes = (JSONObject) response.get("attributes");
+                (Request.Method.GET, states_url + identifier, null, response -> {
+                    // TODO: Adjust accordingly to the json response.
+                    // Issue could be the fact that the response is a JSONArray rather than a
+                    // JSONObject.
+                }, error -> Log.i("Request Error", error.getMessage()));
+        }
 
-                        this.deviceName.setText((String) attributes.get("friendly_name"));
-                        this.deviceSwitch.setChecked(response.get("state").equals("on"));
-                        this.deviceSwitch.setEnabled(true);
-                        this.power.setText((String) attributes.get("current_power_w"));
-                        this.current.setText((String) attributes.get("current_a"));
-                        this.voltage.setText((String) attributes.get("voltage"));
-                        this.energyToday.setText((String) attributes.get("today_energy_kwh"));
-                        this.energyTotal.setText((String) attributes.get("total_energy_kwh"));
-                    } catch (JSONException e) {
-                        //Log.i("JSONException", e.getMessage());
-                        this.deviceName.setText("JSON Exception");
+        @Override
+        public void onCheckedChanged (CompoundButton buttonView,boolean isChecked){
+            // Make API call here
+            HashMap<String, String> params = new HashMap<String, String>();
+            params.put("entity_id", identifier);
 
-                    }
-                }, error -> {
-                    //Log.i("Request Error", error.getMessage());
-                    this.deviceName.setText("Unavailable");
-                    this.deviceSwitch.setChecked(false);
-                    this.deviceSwitch.setEnabled(false);
-                    this.power.setText("-");
-                    this.current.setText("-");
-                    this.voltage.setText("-");
-                    this.energyToday.setText("-");
-                    this.energyTotal.setText("-");
-                })  {
+            JsonObjectRequest jsonObjectRequest;
+            jsonObjectRequest = new JsonObjectRequest
+                    (Request.Method.POST, base_url, new JSONObject(params), response -> {
+                        // Success
+                    }, error -> {
+                        // Error accessing the api call
+                        Log.e("light.toggle", error.getMessage());
+                    }) {
 
-            /**
-             * Passing some request headers
-             */
-            @Override
-            public Map<String, String> getHeaders() throws AuthFailureError {
-                HashMap<String, String> headers = new HashMap<String, String>();
-                headers.put("Authorization", authenticator);
-                headers.put("Content-Type", "application/json");
-                return headers;
-            }};
+                /**
+                 * Passing some request headers
+                 */
+                @Override
+                public Map<String, String> getHeaders() throws AuthFailureError {
+                    HashMap<String, String> headers = new HashMap<String, String>();
+                    headers.put("Authorization", authenticator);
+                    headers.put("Content-Type", "application/json");
+                    return headers;
+                }
+            };
 
-        // Access the RequestQueue through your singleton class.
-        RequestSingleton.getInstance(this.context).addToRequestQueue(jsonObjectRequest);
+            // Access the RequestQueue through your singleton class.
+            RequestSingleton.getInstance(this.context).addToRequestQueue(jsonObjectRequest);
+        }
     }
-
-    @Override
-    public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-        // Make API call here
-        JsonObjectRequest jsonObjectRequest = null;
-        jsonObjectRequest = new JsonObjectRequest
-                (Request.Method.POST, base_url, null, response -> {
-                    return;
-                }, error -> {
-                    Log.i("Request Error", error.getMessage());
-                })  {
-
-            /**
-             * Passing some request headers
-             */
-            @Override
-            public Map<String, String> getHeaders() throws AuthFailureError {
-                HashMap<String, String> headers = new HashMap<String, String>();
-                //headers.put("Content-Type", "application/json");
-                headers.put("Authorization", authenticator);
-                headers.put("Content-Type", "application/json");
-                return headers;
-            }};
-
-        // Access the RequestQueue through your singleton class.
-        RequestSingleton.getInstance(this.context).addToRequestQueue(jsonObjectRequest);
-    }
-}
