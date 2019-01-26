@@ -79,13 +79,13 @@ public class ARDevice extends Node implements Node.OnTapListener {
         }
 
         if (useInfoCard == null) {
-            useInfoCard = new ARDeviceInfoCard("TestDeviceName", "USE CASE", this.context);
+            useInfoCard = new SmartSwitchInfoCard("tplink1", "Smart Socket", this.context);
             useInfoCard.setParent(this);
             useInfoCard.setEnabled(false);
         }
 
         if (editInfoCard == null) {
-            editInfoCard = new ARDeviceInfoCard("TestDeviceName", "EDIT CASE", this.context);
+            editInfoCard = new ARDeviceInfoCard("tplink1", "Smart Socket", this.context);
             editInfoCard.setParent(this);
             editInfoCard.setEnabled(false);
         }

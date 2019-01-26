@@ -32,6 +32,7 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    implementation 'com.android.volley:volley:1.1.1'
 }
 
 
@@ -59,3 +60,13 @@ sceneform.asset('sampledata/models/lightbulb.fbx',
         'default',
         'sampledata/models/lightbulb.sfa',
         'src/main/assets/lightbulb')
+
+sceneform.asset('sampledata/models/button.fbx',
+        'default',
+        'sampledata/models/button.sfa',
+        'src/main/assets/button')
+
+sceneform.asset('sampledata/models/sensor.fbx',
+        'default',
+        'sampledata/models/sensor.sfa',
+        'src/main/assets/sensor')

@@ -11,13 +11,14 @@ import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.janhelmich.coeus.R;
 
 public class ARDeviceInfoCard extends Node implements Node.OnTapListener {
-    private static final float INFO_CARD_Y_POS_COEFF = 0.55f;
+    protected static final float INFO_CARD_Y_POS_COEFF = 0.55f;
 
-    private boolean listVisible = false;
-    private final String deviceId;
-    private final String deviceType;
+    private final int layout;
 
-    private final Context context;
+    protected final String deviceId;
+    protected final String deviceType;
+
+    protected final Context context;
 
 
     public ARDeviceInfoCard(String deviceId, String deviceType, Context context) {
@@ -26,6 +27,8 @@ public class ARDeviceInfoCard extends Node implements Node.OnTapListener {
         this.deviceType = deviceType;
         this.context = context;
         setOnTapListener(this);
+
+        layout = R.layout.ar_device_info;
     }
 
     @Override
@@ -36,7 +39,7 @@ public class ARDeviceInfoCard extends Node implements Node.OnTapListener {
 
         this.setLocalPosition(new Vector3(0.0f, INFO_CARD_Y_POS_COEFF, 0.0f));
         ViewRenderable.builder()
-                .setView(context, R.layout.ar_device_info)
+                .setView(context, layout)
                 .build()
                 .thenAccept(
                         (renderable) -> {
