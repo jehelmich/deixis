@@ -85,12 +85,12 @@ public class ARDevice extends Node implements Node.OnTapListener {
         }
 
         if (editInfoCard == null) {
-            editInfoCard = new ARDeviceInfoCard("tplink1", "Smart Socket", this.context);
+            editInfoCard = new ARInfoCard(this.context);
             editInfoCard.setParent(this);
             editInfoCard.setEnabled(false);
         }
 
-        infoCard = useInfoCard;
+        infoCard = editInfoCard;
     }
 
     @Override
