@@ -5,7 +5,7 @@ over your local network; nothing goes through the cloud.
 
 1. In the HA web UI open your profile (bottom-left) → **Security** → **Long-lived access
    tokens** → *Create token*. Copy it — HA shows it once.
-2. In Coeus, **Settings** → *Home Assistant*. Enter the base URL exactly as you reach HA in
+2. In Deixis, **Settings** → *Home Assistant*. Enter the base URL exactly as you reach HA in
    a browser, e.g. `http://homeassistant.local:8123` or `http://192.168.1.20:8123`, and
    paste the token.
 3. **Test connection** should answer `API running. N usable device(s) found.` Then **Save**.
@@ -16,7 +16,7 @@ installations run; use `https` if yours has it.
 
 ## What shows up
 
-| HA entity | Coeus device | Card shows |
+| HA entity | Deixis device | Card shows |
 |---|---|---|
 | `switch.*` | Smart plug | on/off switch; power, current, voltage and energy **if** the switch entity carries `current_power_w`, `current_a`, `voltage`, `today_energy_kwh`, `total_energy_kwh` attributes (2019-era TP-Link integration) |
 | `light.*` | Light | on/off switch; brightness slider if the entity reports `brightness` |

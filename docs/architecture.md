@@ -4,7 +4,7 @@ Three layers, one interface between them, no framework doing the wiring.
 
 ## Domain
 
-[`domain/`](../app/src/main/kotlin/com/janhelmich/coeus/domain/) has no Android imports.
+[`domain/`](../app/src/main/kotlin/com/janhelmich/deixis/domain/) has no Android imports.
 
 - `Device` — identity: id, name, `DeviceKind` (`PLUG`, `LIGHT`, `SENSOR`). The kind decides
   both the 3D shape and which controls the card shows.

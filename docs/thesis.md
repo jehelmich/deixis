@@ -1,6 +1,8 @@
 # The 2019 thesis app, and what became of it
 
-The git tag `thesis-2019` holds the code as it stood when the bachelor thesis was written:
+The git tag `thesis-2019` holds the code as it stood when the bachelor thesis was written,
+under its original name, *Coeus* (a Titan; "the axis around which the constellations
+revolve" — the rewrite is named for what the thesis was actually about instead):
 Java, Sceneform 1.6, Android Support Library, Volley, `.sfb` model assets. None of it builds
 today — Sceneform was archived by Google in 2020, JCenter is gone, Support Library became
 AndroidX — so the rewrite was a re-platforming rather than a dependency bump.

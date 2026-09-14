@@ -1,22 +1,24 @@
-# Coeus — smart-home control in augmented reality
+# Deixis — smart-home control by pointing at things
 
-[![CI](https://github.com/jehelmich/coeus/actions/workflows/ci.yml/badge.svg)](https://github.com/jehelmich/coeus/actions/workflows/ci.yml)
+[![CI](https://github.com/jehelmich/deixis/actions/workflows/ci.yml/badge.svg)](https://github.com/jehelmich/deixis/actions/workflows/ci.yml)
 
 Point your phone at the room, pin your smart plugs, lights and sensors to where they
 actually are, and control them by tapping the thing itself. A floating card above each
 device shows its live readings — power draw, brightness, temperature — and the switch to
 change them.
 
-The idea comes from my Cambridge Computer Science bachelor thesis (2019): can spatial
-placement replace the flat device list every smart-home app ends up with? This repository
+*Deixis* is the linguists' word for reference that only works from where you stand — "this
+one", "over there". The idea comes from my Cambridge Computer Science bachelor thesis
+(2019): can pointing at a device replace finding it in the flat list every smart-home app
+ends up with? This repository
 is that thesis app rebuilt on the 2026 Android stack — Kotlin, Jetpack Compose, ARCore via
 SceneView — with one addition the original never had: a **simulated home**, so it runs as a
 demo without any hardware. The 2019 code is preserved at the git tag
-[`thesis-2019`](https://github.com/jehelmich/coeus/tree/thesis-2019).
+[`thesis-2019`](https://github.com/jehelmich/deixis/tree/thesis-2019).
 
 ## Try it
 
-Grab the APK from the [latest release](https://github.com/jehelmich/coeus/releases) or build
+Grab the APK from the [latest release](https://github.com/jehelmich/deixis/releases) or build
 it yourself (below). It starts against the simulated home:
 
 - **AR tab** — *Edit* mode: pick a device from the chips, tap a detected surface to place
@@ -61,7 +63,7 @@ the settings change. [docs/architecture.md](docs/architecture.md) goes into deta
 ## Repository layout
 
 ```
-app/src/main/kotlin/com/janhelmich/coeus/
+app/src/main/kotlin/com/janhelmich/deixis/
   domain/          Device, DeviceState, SmartHomeRepository — no Android in here
   data/simulated/  the pretend home
   data/homeassistant/  REST client, entity → device mapping, polling repository

@@ -5,14 +5,14 @@ plugins {
 }
 
 android {
-    namespace = "com.janhelmich.coeus"
+    namespace = "com.janhelmich.deixis"
     compileSdk = 37
 
     // Filament ships prebuilt native libraries; Play requires 16 KB page alignment on Android 15+.
     experimentalProperties["android.nativeLibraryAlignmentPageSize"] = "16k"
 
     defaultConfig {
-        applicationId = "com.janhelmich.coeus"
+        applicationId = "com.janhelmich.deixis"
         // ARCore itself supports 24; SceneView's Filament build and the Compose stack want 28.
         minSdk = 28
         targetSdk = 37
