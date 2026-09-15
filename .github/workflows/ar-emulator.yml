@@ -1,13 +1,12 @@
 name: AR on the emulator
 
-# Runs the on-device placement test against ARCore in the Android Emulator's virtual scene.
-# Kept out of ci.yml: it needs an x86_64 emulator with KVM, the x86 build of Google Play
-# Services for AR sideloaded, and about ten minutes. The test skips itself (not fails) when
-# ARCore starts but never tracks a plane, so a red run here means a real app problem.
+# Tries the on-device placement test against ARCore in the Android Emulator's virtual scene.
+# Manual only: it needs an x86_64 emulator with KVM and the x86 build of Google Play Services
+# for AR sideloaded, and the first attempt never got the emulator online (virtual scene under
+# SwiftShader on a two-core runner). The test skips itself when ARCore starts but never
+# tracks a plane, so once the emulator boots a red run means a real app problem.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * 1'   # Mondays, 06:00 UTC
 
 env:
   ARCORE_VERSION: 1.56.0
