@@ -73,8 +73,11 @@ class AnchoringSession(context: Context) {
 
     /** First confirmed lock on a loaded map: every marker with its pose in the session. Main thread. */
     var onRestore: ((List<Pair<MarkerPose, Mat4>>) -> Unit)? = null
-    /** An accepted correction big enough to move anchors. Main thread. */
+    /** Every accepted correction: where each marker should be now, to glide toward. Main thread. */
+    var onCorrection: ((List<Pair<MarkerPose, Mat4>>) -> Unit)? = null
+    /** A correction so large the anchors themselves should be recreated. Main thread. */
     var onReanchor: ((List<Pair<MarkerPose, Mat4>>) -> Unit)? = null
+    private var misses = 0
 
     /** Load the saved room, if there is one, and start recognising against it. */
     fun loadIfPresent(): Boolean {
@@ -139,8 +142,13 @@ class AnchoringSession(context: Context) {
             }
 
             val c = controller ?: return
+            val attemptsBefore = c.attempts
             val decision = c.onFrame(features, f.intrinsics, f.cameraPose, nowNanos)
             _status.value = c.status
+            if (decision == null && c.attempts != attemptsBefore) {
+                misses++
+                if (misses % 10 == 1) Log.i(TAG, "reloc: not found (miss #$misses, ${features.count} live features)")
+            }
             if (decision != null) {
                 val r = c.lastRelocalization
                 val cur = c.alignment.current
@@ -155,15 +163,20 @@ class AnchoringSession(context: Context) {
                     Log.i(TAG, "restore ${m.size} markers: " + m.joinToString { "${it.first.label}@${it.second.translation}" })
                     main.post { onRestore?.invoke(m) }
                 }
-            } else {
-                // Compare against where the anchors actually are, not the last step: the loop
-                // converges in small blends, and their sum is what has to be corrected.
+            } else if (decision is AlignmentDecision.Bootstrapped || decision is AlignmentDecision.Blended ||
+                decision is AlignmentDecision.Rebootstrapped) {
+                // Small corrections glide (the screen offsets each marker smoothly from its anchor);
+                // only a correction large enough to make that offset unwieldy recreates anchors.
+                // Compared against where the anchors actually sit, not the last step.
                 val anchored = anchoredAlignment
-                if (anchored != null && c.alignment.maxProbeDisplacement(anchored, cur) > REANCHOR_METERS) {
-                    anchoredAlignment = cur
-                    c.markersInSession()?.let { m ->
-                        Log.i(TAG, "re-anchor (moved ${"%.3f".format(c.alignment.maxProbeDisplacement(anchored, cur))} m)")
+                val moved = if (anchored != null) c.alignment.maxProbeDisplacement(anchored, cur) else 0f
+                c.markersInSession()?.let { m ->
+                    if (anchored != null && moved > REANCHOR_METERS) {
+                        anchoredAlignment = cur
+                        Log.i(TAG, "re-anchor (moved ${"%.3f".format(moved)} m)")
                         main.post { onReanchor?.invoke(m) }
+                    } else {
+                        main.post { onCorrection?.invoke(m) }
                     }
                 }
             }
@@ -202,8 +215,8 @@ class AnchoringSession(context: Context) {
         val GRAVITY = Float3(0f, -1f, 0f) // ARCore's world Y is up
         const val MIN_KEYFRAME_POINTS = 50
         const val MIN_KEYFRAMES_TO_SAVE = 3
-        /** Corrections smaller than this are absorbed by ARCore tracking; larger ones re-anchor. */
-        const val REANCHOR_METERS = 0.05f
+        /** Corrections up to this glide as an offset from the anchor; beyond it the anchors are recreated. */
+        const val REANCHOR_METERS = 0.5f
         /** Let ARCore's tracking settle before the first recognition; a lock taken too early is coarse. */
         const val WARMUP_NANOS = 1_500_000_000L
         const val TRACKING_GAP_NANOS = 1_000_000_000L

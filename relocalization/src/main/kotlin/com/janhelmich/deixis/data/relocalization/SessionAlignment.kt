@@ -21,8 +21,8 @@ data class AlignmentConfig(
     val bootstrapConfirmations: Int = 2,
     /** Inlier count at which a candidate earns [maxGain]; below it the gain scales down. */
     val saturationInliers: Int = 80,
-    val minGain: Float = 0.15f,
-    val maxGain: Float = 0.6f,
+    val minGain: Float = 0.12f,
+    val maxGain: Float = 0.4f,
     /**
      * Constellation gate: a candidate that would move any marker further than this from where
      * the current alignment puts it is treated as a wrong lock and rejected.
@@ -103,7 +103,9 @@ class SessionAlignment(
             }
             bootstrapRun += candidate
             if (bootstrapRun.size < config.bootstrapConfirmations) return AlignmentDecision.RejectedWeak
-            accept(candidate, inliers)
+            // Adopt the average of the agreeing observations, not the last one raw: halves the
+            // noise of the first placement, which is the one the user sees first.
+            accept(blendPose(bootstrapRun.first(), candidate, 0.5f), inliers)
             bootstrapRun.clear()
             return AlignmentDecision.Bootstrapped
         }

@@ -32,7 +32,7 @@ class SessionAlignmentTest {
         assertNull(a.current)
         // …a second that agrees adopts it.
         assertEquals(AlignmentDecision.Bootstrapped, a.propose(first * translation(Float3(0.02f, 0f, 0f)), inliers = 30))
-        assertEquals(1.02f, a.current!!.translation.x, 1e-4f)
+        assertEquals(1.01f, a.current!!.translation.x, 1e-4f) // the average of the two
     }
 
     @Test

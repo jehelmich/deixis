@@ -50,6 +50,10 @@ class RelocalizationController(
     private var lastResult: RelocalizationResult = RelocalizationResult.NotFound
     val lastRelocalization: RelocalizationResult get() = lastResult
 
+    /** Total recognition attempts so far, so callers can tell a skipped frame from a miss. */
+    var attempts: Int = 0
+        private set
+
     /**
      * Offer a frame. Returns the alignment decision if a relocalization attempt ran this frame,
      * `null` if it was skipped for cadence.
@@ -64,6 +68,7 @@ class RelocalizationController(
         val last = lastAttemptNanos
         if (last == null || nowNanos - last >= config.attemptIntervalNanos) {
             lastAttemptNanos = nowNanos
+            attempts++
             val result = relocalizer.relocalize(map, features, intrinsics, cameraInSession)
             lastResult = result
             if (result is RelocalizationResult.Located) {
