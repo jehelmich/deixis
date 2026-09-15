@@ -3,6 +3,9 @@
 The app talks to Home Assistant's [REST API](https://developers.home-assistant.io/docs/api/rest/)
 over your local network; nothing goes through the cloud.
 
+No Home Assistant? [`homeassistant/`](../homeassistant/) starts a real one in Docker with
+dummy devices and prints the URL and token — one command, see its README.
+
 1. In the HA web UI open your profile (bottom-left) → **Security** → **Long-lived access
    tokens** → *Create token*. Copy it — HA shows it once.
 2. In Deixis, **Settings** → *Home Assistant*. Enter the base URL exactly as you reach HA in

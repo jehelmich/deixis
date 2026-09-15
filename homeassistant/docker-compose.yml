@@ -1,0 +1,19 @@
+# A throwaway Home Assistant with dummy devices, for developing and testing Deixis against a
+# real instance. See README.md in this directory.
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: deixis-homeassistant
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./config:/config
+      - ./config/.storage:/config/.storage
+    environment:
+      TZ: Europe/London
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8123/api/onboarding"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped

@@ -1,0 +1,5 @@
+# Only configuration.yaml is ours; everything else under config/ is Home Assistant's runtime
+# state (database, logs, .storage with the owner account and the token).
+config/*
+!config/configuration.yaml
+.token

@@ -46,7 +46,8 @@ any phone with [ARCore support](https://developers.google.com/ar/devices), or bu
    including an emulator, and is the quickest way to watch the backend tick.
 4. **Settings** — switch to a real [Home Assistant](https://www.home-assistant.io): base
    URL and a long-lived token, *Test connection*, *Save*. Switches, lights and
-   temperature/humidity sensors show up; details in
+   temperature/humidity sensors show up. No instance to hand? `homeassistant/up.sh` starts
+   one in Docker with dummy devices and prints the URL and token —
    [docs/home-assistant.md](docs/home-assistant.md).
 
 ## What is in it
@@ -66,9 +67,10 @@ any phone with [ARCore support](https://developers.google.com/ar/devices), or bu
 - **Gestures that stick.** ARCore rewrites an anchor's pose every frame, so the anchor
   owns position only and a child node owns rotation and scale. Only the selected marker
   takes gestures, and pinch and twist work from anywhere on the screen.
-- **Tests at both ends.** JVM unit tests for the backends, the Home Assistant mapping and
-  the HTTP client (against a mock server); one UiAutomator test that places a marker over a
-  live ARCore session.
+- **Tests at every layer.** JVM unit tests for the backends, the Home Assistant mapping and
+  the HTTP client against a mock server; live tests against a real Home Assistant that CI
+  boots in Docker on every push; one UiAutomator test that places a marker over a live
+  ARCore session.
 
 ## How it works
 
@@ -108,10 +110,11 @@ app/src/main/kotlin/com/janhelmich/deixis/
   ui/devices/      flat device list
   ui/settings/     backend settings
   ui/common/       DeviceControls, shared by the AR card and the list
-app/src/test/      JVM unit tests
+app/src/test/      JVM unit tests, plus the live Home Assistant tests
 app/src/androidTest/  the on-device placement test
+homeassistant/     a real Home Assistant with dummy devices, in Docker, one command
 docs/              architecture, Home Assistant setup, thesis notes, images, icon source
-.github/workflows  CI on every push; APK attached to releases on v* tags; emulator experiment
+.github/workflows  CI, live Home Assistant tests, release APK on v* tags, emulator experiment
 ```
 
 ## Building
@@ -124,6 +127,10 @@ it opens the project fine.
 ./gradlew lintDebug testDebugUnitTest    # what CI runs on every push
 ./gradlew installDebug                   # onto a connected phone
 ./gradlew connectedDebugAndroidTest      # the AR placement test, on that phone
+
+homeassistant/up.sh                      # a real Home Assistant in Docker, then:
+DEIXIS_HA_URL=http://localhost:8123 DEIXIS_HA_TOKEN=$(cat homeassistant/.token) \
+  ./gradlew testDebugUnitTest --tests '*HomeAssistantLiveTest*'
 ```
 
 Stack: Kotlin 2.4 (AGP 9.4 built-in), Compose Material 3, SceneView 4.35 / ARCore 1.56 /
@@ -131,18 +138,20 @@ Filament 1.72, Ktor 3.5, DataStore, Navigation with type-safe routes, JVM 21.
 
 ## Status
 
-**Working, on hardware.** Everything above has been used on a Galaxy Z Flip6 (Android 16,
-ARCore 1.56): placing on floors and desks, naming and binding, selection, drag / twist /
-pinch, the floating card and its controls, mode switching, the device list and settings.
-The on-device placement test passes there in about twelve seconds; lint, unit tests and
-both APK builds are green on every push.
+**Working, on hardware and against a real backend.** Everything above has been used on a
+Galaxy Z Flip6 (Android 16, ARCore 1.56): placing on floors and desks, naming and binding,
+selection, drag / twist / pinch, the floating card and its controls, mode switching, the
+device list and settings. The on-device placement test passes there in about twelve
+seconds. The Home Assistant client is exercised against a real instance — HA's own demo
+devices, booted in Docker — on every push, and lint, unit tests and both APK builds are
+green alongside it.
 
 Not yet covered, in order of how much I'd like to:
 
-- **Home Assistant against a live instance.** The client and mapping are unit-tested
-  against recorded payloads, not a running HA. Plug power readings expect the attribute
-  names the 2019 TP-Link integration used; newer integrations put those on separate
-  `sensor.*` entities and the plug card shows "—" for them.
+- **Real plugs with power readings.** HA's demo switches and most current integrations
+  keep power on separate `sensor.*` entities; the plug card shows "—" for them. The mapping
+  reads the attributes the thesis-era TP-Link integration put on the switch itself, and a
+  next step is pairing a switch with its power sensors by device.
 - **Persistence.** Markers live in the view model and survive rotation, not process death.
   ARCore anchors are session-bound; keeping a room between launches means Cloud Anchors or
   a persistence layer, neither of which the thesis had either.

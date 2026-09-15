@@ -1,0 +1,21 @@
+# Home Assistant configuration for the Deixis demo instance.
+#
+# `demo:` loads Home Assistant's own dummy entities: lights, switches, temperature, humidity
+# and power sensors, and much more. They are controllable from HA's dashboard, so a light
+# switched off in AR goes off in the browser and vice versa.
+homeassistant:
+  name: Deixis demo home
+  unit_system: metric
+  time_zone: Europe/London
+
+demo:
+
+# The frontend and REST API. `cors_allowed_origins` is not needed for the app; it talks to
+# the API directly.
+frontend:
+api:
+http:
+
+# Keep the log readable when tailing the container.
+logger:
+  default: warning
