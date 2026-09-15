@@ -23,6 +23,9 @@ class CapturedFrame(
     /** Metres at a CPU-image pixel, or `null` where ARCore has no depth. */
     val depth: KeyframeBuilder.DepthSource,
     val hasDepth: Boolean,
+    /** What ARCore says the intrinsics are for (should equal width×height) and the depth size. */
+    val intrinsicsDims: Pair<Int, Int>,
+    val depthDims: Pair<Int, Int>?,
 )
 
 object FrameCapture {
@@ -45,12 +48,16 @@ object FrameCapture {
         } finally { image.close() }
 
         val ci = frame.camera.imageIntrinsics
-        val f = ci.focalLength; val c = ci.principalPoint
+        val f = ci.focalLength; val c = ci.principalPoint; val d = ci.imageDimensions
         val intrinsics = DeixisIntrinsics(fx = f[0], fy = f[1], cx = c[0], cy = c[1])
         val pose = frame.camera.pose.toMat4()
 
         val depth = depthOf(frame, w, h)
-        return CapturedFrame(gray, w, h, intrinsics, pose, depth ?: KeyframeBuilder.DepthSource { _, _ -> null }, depth != null)
+        return CapturedFrame(
+            gray, w, h, intrinsics, pose,
+            depth?.first ?: KeyframeBuilder.DepthSource { _, _ -> null }, depth != null,
+            intrinsicsDims = d[0] to d[1], depthDims = depth?.second,
+        )
     }
 
     /** The Y plane of a YUV_420_888 image, packed into a tight row-major buffer. */
@@ -77,7 +84,7 @@ object FrameCapture {
      * ARCore's 16-bit depth image (millimetres) covers the same field of view as the camera
      * image at a lower resolution; a camera pixel maps to a depth pixel by scaling.
      */
-    private fun depthOf(frame: Frame, camW: Int, camH: Int): KeyframeBuilder.DepthSource? {
+    private fun depthOf(frame: Frame, camW: Int, camH: Int): Pair<KeyframeBuilder.DepthSource, Pair<Int, Int>>? {
         val image = try {
             frame.acquireDepthImage16Bits()
         } catch (_: NotYetAvailableException) { return null }
@@ -93,12 +100,13 @@ object FrameCapture {
                 buf.asShortBuffer().get(mm, y * dw, dw)
             }
             val sx = dw.toFloat() / camW; val sy = dh.toFloat() / camH
-            return KeyframeBuilder.DepthSource { px, py ->
+            val source = KeyframeBuilder.DepthSource { px, py ->
                 val x = (px * sx).toInt(); val y = (py * sy).toInt()
                 if (x < 0 || y < 0 || x >= dw || y >= dh) return@DepthSource null
                 val v = mm[y * dw + x].toInt() and 0xFFFF
                 if (v == 0) null else v / 1000f
             }
+            return source to (dw to dh)
         } finally { image.close() }
     }
 }

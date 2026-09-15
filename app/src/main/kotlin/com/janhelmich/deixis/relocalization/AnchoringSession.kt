@@ -15,6 +15,8 @@ import com.janhelmich.deixis.data.relocalization.MarkerPose
 import com.janhelmich.deixis.data.relocalization.OrbFeatureExtractor
 import com.janhelmich.deixis.data.relocalization.OrbRelocalizer
 import com.janhelmich.deixis.data.relocalization.RelocalizationController
+import com.janhelmich.deixis.data.relocalization.RelocalizationResult
+import com.janhelmich.deixis.data.relocalization.poseDelta
 import dev.romainguy.kotlin.math.Float3
 import dev.romainguy.kotlin.math.Mat4
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +46,11 @@ class AnchoringSession(context: Context) {
     private val builder = MapBuilder(MAP_ID, "Home")
     private var controller: RelocalizationController? = null
     private var restored = false
+    /** The alignment the markers' anchors were last created at; re-anchor when it drifts away. */
+    private var anchoredAlignment: Mat4? = null
+    private var trackingSinceNanos: Long? = null
+    private var lastFrameNanos: Long? = null
+    private var loggedDims = false
 
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "deixis-anchoring") }
     private val busy = AtomicBoolean(false)
@@ -76,6 +83,7 @@ class AnchoringSession(context: Context) {
         synchronized(lock) {
             controller = RelocalizationController(map, relocalizer!!)
             restored = false
+            anchoredAlignment = null
             _hasMap.value = true
             _status.value = AlignmentStatus.Searching
         }
@@ -83,9 +91,17 @@ class AnchoringSession(context: Context) {
         return true
     }
 
-    /** Offer a frame. Cheap on the calling thread; skipped while the worker is still busy. */
+    /**
+     * Offer a tracking frame. Cheap on the calling thread; skipped while the worker is still
+     * busy, and for a short warm-up after tracking (re)starts, because ARCore's first poses are
+     * still settling and a lock taken then anchors everything slightly off.
+     */
     fun onFrame(frame: Frame, capturing: Boolean, nowNanos: Long) {
         if (!available || busy.get()) return
+        val last = lastFrameNanos
+        if (last == null || nowNanos - last > TRACKING_GAP_NANOS) trackingSinceNanos = nowNanos
+        lastFrameNanos = nowNanos
+        if (nowNanos - (trackingSinceNanos ?: nowNanos) < WARMUP_NANOS) return
         val captured = FrameCapture.capture(frame) ?: return
         if (!busy.compareAndSet(false, true)) return
         worker.execute {
@@ -97,6 +113,12 @@ class AnchoringSession(context: Context) {
 
     private fun process(f: CapturedFrame, capturing: Boolean, nowNanos: Long) {
         val features = extractor!!.extract(f.gray, f.width, f.height)
+        if (!loggedDims) {
+            loggedDims = true
+            Log.i(TAG, "image ${f.width}x${f.height}, intrinsics for ${f.intrinsicsDims.first}x${f.intrinsicsDims.second} " +
+                "fx=${f.intrinsics.fx} fy=${f.intrinsics.fy} cx=${f.intrinsics.cx} cy=${f.intrinsics.cy}, " +
+                "depth=${f.depthDims?.let { "${it.first}x${it.second}" } ?: "none"}, features=${features.count}")
+        }
         synchronized(lock) {
             if (capturing) {
                 if (!f.hasDepth) {
@@ -106,6 +128,8 @@ class AnchoringSession(context: Context) {
                         id = builder.nextKeyframeId(), features = features, intrinsics = f.intrinsics,
                         cameraPose = f.cameraPose, gravity = GRAVITY, depth = f.depth,
                     )
+                    Log.i(TAG, "keyframe #${builder.keyframeCount}: ${features.count} features, ${kf.features.count} with depth, " +
+                        "cam=${f.cameraPose.translation}")
                     if (kf.features.count >= MIN_KEYFRAME_POINTS) {
                         builder.add(kf); selector.recordCaptured(f.cameraPose)
                         _keyframes.value = builder.keyframeCount
@@ -115,17 +139,33 @@ class AnchoringSession(context: Context) {
             }
 
             val c = controller ?: return
-            val before = c.alignment.current
             val decision = c.onFrame(features, f.intrinsics, f.cameraPose, nowNanos)
             _status.value = c.status
-            val after = c.alignment.current ?: return
-            val accepted = decision is AlignmentDecision.Bootstrapped || decision is AlignmentDecision.Blended ||
-                decision is AlignmentDecision.Rebootstrapped
+            if (decision != null) {
+                val r = c.lastRelocalization
+                val cur = c.alignment.current
+                Log.i(TAG, "reloc: " + (if (r is RelocalizationResult.Located) "inliers=${r.inlierCount}" else "not found") +
+                    " -> $decision" + (cur?.let { " | T_session_map t=${it.translation} rot=${"%.1f".format(poseDelta(it, Mat4.identity()).rotationDegrees)}°" } ?: ""))
+            }
+            val cur = c.alignment.current ?: return
             if (!restored) {
                 restored = true
-                c.markersInSession()?.let { m -> main.post { onRestore?.invoke(m) } }
-            } else if (accepted && before != null && c.alignment.maxProbeDisplacement(before, after) > REANCHOR_METERS) {
-                c.markersInSession()?.let { m -> main.post { onReanchor?.invoke(m) } }
+                anchoredAlignment = cur
+                c.markersInSession()?.let { m ->
+                    Log.i(TAG, "restore ${m.size} markers: " + m.joinToString { "${it.first.label}@${it.second.translation}" })
+                    main.post { onRestore?.invoke(m) }
+                }
+            } else {
+                // Compare against where the anchors actually are, not the last step: the loop
+                // converges in small blends, and their sum is what has to be corrected.
+                val anchored = anchoredAlignment
+                if (anchored != null && c.alignment.maxProbeDisplacement(anchored, cur) > REANCHOR_METERS) {
+                    anchoredAlignment = cur
+                    c.markersInSession()?.let { m ->
+                        Log.i(TAG, "re-anchor (moved ${"%.3f".format(c.alignment.maxProbeDisplacement(anchored, cur))} m)")
+                        main.post { onReanchor?.invoke(m) }
+                    }
+                }
             }
         }
     }
@@ -145,6 +185,7 @@ class AnchoringSession(context: Context) {
             store.save(map)
             controller = RelocalizationController(map, relocalizer!!).also { it.seed(Mat4.identity(), nowNanos) }
             restored = true
+            anchoredAlignment = Mat4.identity()
             _hasMap.value = true
             _status.value = controller!!.status
             "Saved ${map.keyframes.size} keyframes, ${map.pointCount} points, ${map.markers.size} devices"
@@ -163,5 +204,8 @@ class AnchoringSession(context: Context) {
         const val MIN_KEYFRAMES_TO_SAVE = 3
         /** Corrections smaller than this are absorbed by ARCore tracking; larger ones re-anchor. */
         const val REANCHOR_METERS = 0.05f
+        /** Let ARCore's tracking settle before the first recognition; a lock taken too early is coarse. */
+        const val WARMUP_NANOS = 1_500_000_000L
+        const val TRACKING_GAP_NANOS = 1_000_000_000L
     }
 }

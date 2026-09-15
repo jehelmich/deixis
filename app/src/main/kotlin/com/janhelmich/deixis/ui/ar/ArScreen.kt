@@ -183,7 +183,9 @@ fun ArScreen(viewModel: ArViewModel) {
             ),
         ) {
             placements.forEach { placement ->
-                key(placement.id) {
+                // Keyed on the anchor too: a re-anchor must rebuild the whole node subtree, or
+                // the remembered child nodes stay attached to the destroyed parent.
+                key(placement.id, placement.anchor) {
                     PlacedDevice(
                         placement = placement,
                         device = placement.deviceId?.let { id -> devices.firstOrNull { it.id == id } },
