@@ -1,0 +1,167 @@
+package com.janhelmich.deixis.relocalization
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import com.google.ar.core.Frame
+import com.janhelmich.deixis.data.relocalization.AlignmentDecision
+import com.janhelmich.deixis.data.relocalization.AlignmentStatus
+import com.janhelmich.deixis.data.relocalization.FileMapStore
+import com.janhelmich.deixis.data.relocalization.KeyframeBuilder
+import com.janhelmich.deixis.data.relocalization.KeyframeSelector
+import com.janhelmich.deixis.data.relocalization.MapBuilder
+import com.janhelmich.deixis.data.relocalization.MarkerPose
+import com.janhelmich.deixis.data.relocalization.OrbFeatureExtractor
+import com.janhelmich.deixis.data.relocalization.OrbRelocalizer
+import com.janhelmich.deixis.data.relocalization.RelocalizationController
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Mat4
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * The on-device end of docs/anchoring.md: feeds ARCore frames into capture (while arranging the
+ * room) and recognition (whenever a saved map exists), and tells the screen when to restore or
+ * re-anchor markers. The render thread only ever pays for copying a frame out; extraction,
+ * keyframe building and relocalization run on one worker, one frame at a time.
+ *
+ * One reference space for now: the map is always [MAP_ID]. If OpenCV's native library will not
+ * load, [available] is false and the app behaves exactly as it did without persistence.
+ */
+class AnchoringSession(context: Context) {
+
+    val available: Boolean = OpenCvLoader.ensureLoaded()
+
+    private val store = FileMapStore(File(context.applicationContext.filesDir, "maps"))
+    private val extractor = if (available) OrbFeatureExtractor(maxFeatures = 1200) else null
+    private val relocalizer = if (available) OrbRelocalizer() else null
+    private val selector = KeyframeSelector()
+    private val builder = MapBuilder(MAP_ID, "Home")
+    private var controller: RelocalizationController? = null
+    private var restored = false
+
+    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "deixis-anchoring") }
+    private val busy = AtomicBoolean(false)
+    private val main = Handler(Looper.getMainLooper())
+    private val lock = Any()
+
+    private val _status = MutableStateFlow<AlignmentStatus>(AlignmentStatus.Searching)
+    /** Searching / Locked / Coasting, for the status pill. */
+    val status: StateFlow<AlignmentStatus> = _status.asStateFlow()
+
+    private val _keyframes = MutableStateFlow(0)
+    val keyframes: StateFlow<Int> = _keyframes.asStateFlow()
+
+    private val _hasMap = MutableStateFlow(false)
+    val hasMap: StateFlow<Boolean> = _hasMap.asStateFlow()
+
+    private val _note = MutableStateFlow<String?>(null)
+    /** One-line diagnostics worth surfacing (no depth, save failed, …). */
+    val note: StateFlow<String?> = _note.asStateFlow()
+
+    /** First confirmed lock on a loaded map: every marker with its pose in the session. Main thread. */
+    var onRestore: ((List<Pair<MarkerPose, Mat4>>) -> Unit)? = null
+    /** An accepted correction big enough to move anchors. Main thread. */
+    var onReanchor: ((List<Pair<MarkerPose, Mat4>>) -> Unit)? = null
+
+    /** Load the saved room, if there is one, and start recognising against it. */
+    fun loadIfPresent(): Boolean {
+        if (!available) { _note.value = "Persistence unavailable: OpenCV did not load"; return false }
+        val map = runCatching { store.load(MAP_ID) }.getOrNull() ?: return false
+        synchronized(lock) {
+            controller = RelocalizationController(map, relocalizer!!)
+            restored = false
+            _hasMap.value = true
+            _status.value = AlignmentStatus.Searching
+        }
+        Log.i(TAG, "loaded map: ${map.keyframes.size} keyframes, ${map.pointCount} points, ${map.markers.size} markers")
+        return true
+    }
+
+    /** Offer a frame. Cheap on the calling thread; skipped while the worker is still busy. */
+    fun onFrame(frame: Frame, capturing: Boolean, nowNanos: Long) {
+        if (!available || busy.get()) return
+        val captured = FrameCapture.capture(frame) ?: return
+        if (!busy.compareAndSet(false, true)) return
+        worker.execute {
+            try { process(captured, capturing, nowNanos) }
+            catch (t: Throwable) { Log.w(TAG, "frame processing failed", t) }
+            finally { busy.set(false) }
+        }
+    }
+
+    private fun process(f: CapturedFrame, capturing: Boolean, nowNanos: Long) {
+        val features = extractor!!.extract(f.gray, f.width, f.height)
+        synchronized(lock) {
+            if (capturing) {
+                if (!f.hasDepth) {
+                    _note.value = "No depth from ARCore yet — move the phone to let it estimate depth"
+                } else if (selector.shouldCapture(f.cameraPose, features.count)) {
+                    val kf = KeyframeBuilder.build(
+                        id = builder.nextKeyframeId(), features = features, intrinsics = f.intrinsics,
+                        cameraPose = f.cameraPose, gravity = GRAVITY, depth = f.depth,
+                    )
+                    if (kf.features.count >= MIN_KEYFRAME_POINTS) {
+                        builder.add(kf); selector.recordCaptured(f.cameraPose)
+                        _keyframes.value = builder.keyframeCount
+                        _note.value = null
+                    }
+                }
+            }
+
+            val c = controller ?: return
+            val before = c.alignment.current
+            val decision = c.onFrame(features, f.intrinsics, f.cameraPose, nowNanos)
+            _status.value = c.status
+            val after = c.alignment.current ?: return
+            val accepted = decision is AlignmentDecision.Bootstrapped || decision is AlignmentDecision.Blended ||
+                decision is AlignmentDecision.Rebootstrapped
+            if (!restored) {
+                restored = true
+                c.markersInSession()?.let { m -> main.post { onRestore?.invoke(m) } }
+            } else if (accepted && before != null && c.alignment.maxProbeDisplacement(before, after) > REANCHOR_METERS) {
+                c.markersInSession()?.let { m -> main.post { onReanchor?.invoke(m) } }
+            }
+        }
+    }
+
+    /**
+     * Write the current room — the keyframes captured so far plus [markers] as placed — and
+     * start recognising against it. The alignment is the identity by construction (the map frame
+     * *is* this session), so it is seeded rather than waited for.
+     */
+    fun save(markers: List<MarkerPose>, nowNanos: Long): Result<String> = runCatching {
+        if (!available) error("OpenCV unavailable")
+        synchronized(lock) {
+            require(builder.keyframeCount >= MIN_KEYFRAMES_TO_SAVE) {
+                "Only ${builder.keyframeCount} keyframes — look around the room a little more"
+            }
+            val map = builder.build(markers, System.currentTimeMillis())
+            store.save(map)
+            controller = RelocalizationController(map, relocalizer!!).also { it.seed(Mat4.identity(), nowNanos) }
+            restored = true
+            _hasMap.value = true
+            _status.value = controller!!.status
+            "Saved ${map.keyframes.size} keyframes, ${map.pointCount} points, ${map.markers.size} devices"
+        }
+    }.onFailure { _note.value = it.message }
+
+    fun close() {
+        worker.shutdownNow()
+    }
+
+    private companion object {
+        const val TAG = "DeixisAnchoring"
+        const val MAP_ID = "home"
+        val GRAVITY = Float3(0f, -1f, 0f) // ARCore's world Y is up
+        const val MIN_KEYFRAME_POINTS = 50
+        const val MIN_KEYFRAMES_TO_SAVE = 3
+        /** Corrections smaller than this are absorbed by ARCore tracking; larger ones re-anchor. */
+        const val REANCHOR_METERS = 0.05f
+    }
+}

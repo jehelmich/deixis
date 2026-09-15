@@ -6,6 +6,9 @@ import com.google.ar.core.Anchor
 import com.janhelmich.deixis.domain.Device
 import com.janhelmich.deixis.domain.DeviceState
 import com.janhelmich.deixis.domain.SmartHomeRepository
+import com.janhelmich.deixis.data.relocalization.MarkerPose
+import com.janhelmich.deixis.relocalization.toMat4
+import dev.romainguy.kotlin.math.Mat4
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -117,6 +120,37 @@ class ArViewModel(private val repository: StateFlow<SmartHomeRepository>) : View
             }
         }
         if (_selectedId.value == placementId) _selectedId.value = null
+    }
+
+    /** The markers as placed, in the current session frame — what gets written into a map. */
+    fun markerPoses(): List<MarkerPose> =
+        _placements.value.map { MarkerPose(it.id, it.label, it.deviceId, it.anchor.pose.toMat4()) }
+
+    /**
+     * Bring a recognised room back: one anchor per saved marker, at its pose in this session.
+     * Markers already present (same id) are left alone.
+     */
+    fun restore(markers: List<Pair<MarkerPose, Mat4>>, createAnchor: (Mat4) -> Anchor?) {
+        _placements.update { current ->
+            val present = current.mapTo(HashSet()) { it.id }
+            current + markers.mapNotNull { (m, pose) ->
+                if (m.placementId in present) null
+                else createAnchor(pose)?.let { Placement(m.placementId, it, m.label, m.deviceId) }
+            }
+        }
+    }
+
+    /** An accepted alignment correction: move existing markers to their corrected poses. */
+    fun reanchor(markers: List<Pair<MarkerPose, Mat4>>, createAnchor: (Mat4) -> Anchor?) {
+        val corrected = markers.associate { (m, pose) -> m.placementId to pose }
+        _placements.update { list ->
+            list.map { p ->
+                val pose = corrected[p.id] ?: return@map p
+                val fresh = createAnchor(pose) ?: return@map p
+                p.anchor.detach()
+                p.copy(anchor = fresh)
+            }
+        }
     }
 
     fun toggle(deviceId: String) = viewModelScope.launch { repository.value.toggle(deviceId) }

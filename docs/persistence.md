@@ -123,5 +123,12 @@ back — and it does it without a cloud, an account, or a tag on the wall.
   verified end to end on synthetic ground truth with real OpenCV off-device (recovers the
   camera and marker to sub-millimetre; refuses to lock on an unrelated view). The convention
   flip is pinned separately against hand-built poses.
-- **Next:** the capture loop in the AR screen, a maps UI (save/name/load/delete), rebuilding
-  markers on load, and running the 7-Scenes benchmark for accuracy numbers on real data.
+- **Done, device verification pending:** the runtime loop — `SessionAlignment` (confirmed
+  bootstrap, constellation gate, blended corrections, guarded re-bootstrap), `KeyframeSelector`
+  (multi-viewpoint capture), `MapBuilder`, `RelocalizationController` (Searching / Locked /
+  Coasting) — all unit-tested, including a 60 s drift simulation with dropouts and wrong locks;
+  and the app wiring (`AnchoringSession`: capture while editing, save, auto-load on launch,
+  restore and re-anchor markers, status pill). The model and the numbered requirements are in
+  docs/anchoring.md and docs/anchoring-requirements.md.
+- **Next:** run it on the phone (requirements E1–E7), then XFeat on-device behind
+  `FeatureExtractor` (F1) and 7-Scenes numbers (F2).
