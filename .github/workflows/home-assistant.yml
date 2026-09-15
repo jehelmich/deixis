@@ -41,6 +41,15 @@ jobs:
       - name: Run the live tests
         run: ./gradlew testDebugUnitTest --tests '*HomeAssistantLiveTest*'
 
+      - name: Make sure they ran rather than skipped
+        run: |
+          report=$(ls app/build/test-results/testDebugUnitTest/*HomeAssistantLiveTest*.xml)
+          grep -o 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' "$report"
+          if grep -q 'skipped="[1-9]' "$report"; then
+            echo "::error::The live tests were skipped — DEIXIS_HA_URL/TOKEN did not reach the test JVM"
+            exit 1
+          fi
+
       - name: Home Assistant log
         if: failure()
         working-directory: homeassistant
