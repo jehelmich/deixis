@@ -31,6 +31,25 @@ fun Mat4.transformPoint(point: Float3): Float3 {
 }
 
 /**
+ * Project a **camera-space** point back to a pixel — the exact inverse of [CameraIntrinsics.unproject].
+ * Returns `null` for points at or behind the image plane (camera-space z ≥ 0). Its main use is
+ * testing: with a known 3D scene and known poses it manufactures ground-truth 2D↔3D
+ * correspondences with no sensor at all, so the matcher and `solvePnP` can be measured against
+ * an answer that is exactly right. See docs/relocalization-testing.md.
+ */
+fun CameraIntrinsics.project(cameraSpacePoint: Float3): Pixel? {
+    val (x, y, z) = cameraSpacePoint
+    if (z >= 0f) return null
+    return Pixel(cx - fx * x / z, cy + fy * y / z)
+}
+
+/** A world point projected into a camera at [cameraPose] (camera→world), or `null` if behind it. */
+fun CameraIntrinsics.worldToPixel(world: Float3, cameraPose: Mat4): Pixel? =
+    project(inverse(cameraPose).transformPoint(world))
+
+data class Pixel(val x: Float, val y: Float)
+
+/**
  * The heart of relocalization: given where the live camera sits in the **old map** frame (from
  * `solvePnP` against the map) and where ARCore puts that same camera in the **new session**
  * frame, recover the transform that carries anything stored in the map into the new session.
