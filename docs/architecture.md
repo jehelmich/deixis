@@ -51,26 +51,43 @@ app with one of everything.
 
 ```
 ARSceneView
-├── PlacementReticle            (edit mode, while a device is waiting to be placed)
-└── AnchorNode  name = "placement:<id>", isEditable = (mode == EDIT), scale locked
-    ├── CubeNode / SphereNode / CylinderNode   (DeviceGeometry, isTouchable = false)
-    └── ViewNode                (only while selected)
-        └── DeviceCard          (Compose, its own composition)
+├── PlacementReticle            (while "Add marker" is armed)
+└── AnchorNode  name = "placement:<id>"     position only; editable in EDIT
+    ├── Node                                rotation + scale (0.5×–3×); editable in EDIT
+    │   └── Cube/Sphere/CylinderNodes       DeviceGeometry: pin, plug, lamp or sensor
+    └── ViewNode                            USE mode, while selected
+        └── DeviceCard                      Compose, its own composition
 ```
 
-- **Placing.** The palette sets `pendingDeviceId`. A tap on empty space runs
-  `surfaceHit()` — the first hit on a tracked plane, inside its polygon, the same rule the
-  2019 code used for its crosshair — and `ArViewModel.place()` turns the hit into an anchor.
-- **Selecting.** Tapping any child of an anchor resolves to that anchor because the geometry
-  is not touchable; `Node.placementId()` walks up the parents to the tagged node.
-- **Editing.** SceneView's own node gestures. `moveHitTest` re-runs `surfaceHit()` so a
-  dragged device stays on a plane; the anchor is detached during the drag and recreated on
-  release. Rotation is a two-finger twist; `isScaleEditable = false`.
+A `Placement` is an anchor plus a label and an optional `deviceId`. Where a marker is and
+what it is are set separately, which is what lets the room be laid out before the backend
+is even configured.
+
+- **Placing.** "Add marker" arms `placing`. A tap on empty space runs `surfaceHit()` — the
+  first hit on a tracked plane, inside its polygon, the same rule the 2019 code used for its
+  crosshair — and `ArViewModel.place()` turns the hit into an unbound anchor.
+- **Configuring.** In Edit mode the selected marker opens `PlacementSheet`: name, device
+  dropdown, remove. A 2D sheet rather than a 3D card because SceneView's card window is
+  `FLAG_NOT_FOCUSABLE` and can never take a keyboard.
+- **Selecting.** The shapes are touchable; `Node.placementId()` walks up from whatever was
+  hit to the tagged anchor.
+- **Editing.** SceneView's own node gestures, split across two nodes. `AnchorNode` rewrites
+  its pose — rotation included — from ARCore on every tracked frame, so it is only
+  position-editable: `moveHitTest` re-runs `surfaceHit()` so a dragged device stays on a
+  plane, and the anchor is detached during the drag and recreated on release. The child body
+  node is rotation- and scale-editable; drags on it bubble up to the anchor, twists and
+  pinches stop at it.
+- **Visibility.** ARCore pauses an anchor for seconds at a time while it re-evaluates the
+  plane underneath; `visibleTrackingStates` includes `PAUSED` so the device stays where it
+  was last seen instead of blinking out.
 - **Cards.** A `ViewNode` renders a Compose tree onto a textured quad at 250 px per metre.
   `DeviceCard` is a fixed 240 dp wide, so `ArScreen` computes the scale that makes it
-  0.30 m in the room whatever the phone's density. `onFrame` turns it towards the camera.
-  The `ViewNode` hosts a separate composition: no `CompositionLocal` from the screen reaches
-  it, so the theme is re-applied inside and state is read from the view model's flows.
+  0.30 m in the room whatever the phone's density. `onFrame` turns it towards the camera and
+  invalidates the card's hidden window: the texture is refilled from that window's
+  `dispatchDraw`, which a hardware-accelerated window only re-runs when the container itself
+  is dirty, so without the invalidate a flipped switch never shows. The `ViewNode` hosts a
+  separate composition: no `CompositionLocal` from the screen reaches it, so the theme is
+  re-applied inside and everything is read from the view model's flows.
 - **Geometry colour.** One `MaterialInstance` per shape, created once and recoloured in
   place when state changes; released when the shape leaves the scene.
 

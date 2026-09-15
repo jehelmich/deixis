@@ -5,14 +5,13 @@ import android.view.MotionEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -68,9 +67,9 @@ private const val VIEW_NODE_PX_PER_METRE = 250f
 fun ArScreen(viewModel: ArViewModel) {
     val mode by viewModel.mode.collectAsStateWithLifecycle()
     val devices by viewModel.devices.collectAsStateWithLifecycle()
-    val placed by viewModel.placedDevices.collectAsStateWithLifecycle()
+    val placements by viewModel.placements.collectAsStateWithLifecycle()
     val selectedId by viewModel.selectedId.collectAsStateWithLifecycle()
-    val pendingDeviceId by viewModel.pendingDeviceId.collectAsStateWithLifecycle()
+    val placing by viewModel.placing.collectAsStateWithLifecycle()
     val backendName by viewModel.backendName.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
@@ -114,7 +113,7 @@ fun ArScreen(viewModel: ArViewModel) {
                     Log.d(TAG, "tap: node=${node?.let { it::class.simpleName }} placement=$tapped")
                     when {
                         tapped != null -> viewModel.select(tapped)
-                        viewModel.pendingDeviceId.value != null -> {
+                        viewModel.placing.value -> {
                             val frame = latestFrame ?: return@rememberOnGestureListener
                             val hit = surfaceHit(frame, event)
                             Log.d(TAG, "place: " + (hit?.let { "${(it.trackable as Plane).type} at %.2f m".format(it.distance) } ?: "no surface"))
@@ -125,12 +124,12 @@ fun ArScreen(viewModel: ArViewModel) {
                 },
             ),
         ) {
-            placed.forEach { (placement, device) ->
+            placements.forEach { placement ->
                 key(placement.id) {
                     PlacedDevice(
                         placement = placement,
-                        device = device,
-                        selected = placement.id == selectedId,
+                        device = placement.deviceId?.let { id -> devices.firstOrNull { it.id == id } },
+                        showCard = mode == ArMode.USE && placement.id == selectedId,
                         editing = mode == ArMode.EDIT,
                         viewModel = viewModel,
                         cameraNode = cameraNode,
@@ -139,7 +138,7 @@ fun ArScreen(viewModel: ArViewModel) {
                     )
                 }
             }
-            if (mode == ArMode.EDIT && pendingDeviceId != null && tracking && viewport != IntSize.Zero) {
+            if (placing && tracking && viewport != IntSize.Zero) {
                 PlacementReticle(xPx = viewport.width / 2f, yPx = viewport.height / 2f)
             }
         }
@@ -148,21 +147,32 @@ fun ArScreen(viewModel: ArViewModel) {
             mode = mode,
             onMode = viewModel::setMode,
             backendName = backendName,
-            devices = devices,
-            pendingDeviceId = pendingDeviceId,
-            onChoose = viewModel::choose,
-            hint = hintFor(mode, pendingDeviceId?.let { id -> devices.firstOrNull { it.id == id } },
-                placed.isEmpty(), trackingFailure),
+            placing = placing,
+            onTogglePlacing = viewModel::togglePlacing,
+            hint = hintFor(mode, placing, placements.isEmpty(), trackingFailure),
             error = error,
         )
+
+        // Edit-mode configuration for the selected marker.
+        val selected = placements.firstOrNull { it.id == selectedId }
+        if (mode == ArMode.EDIT && selected != null) {
+            PlacementSheet(
+                placement = selected,
+                devices = devices,
+                onRename = { viewModel.rename(selected.id, it) },
+                onBind = { viewModel.bind(selected.id, it) },
+                onRemove = { viewModel.remove(selected.id) },
+                onDismiss = viewModel::deselect,
+            )
+        }
     }
 }
 
 @Composable
 private fun ARSceneScope.PlacedDevice(
     placement: Placement,
-    device: Device,
-    selected: Boolean,
+    device: Device?,
+    showCard: Boolean,
     editing: Boolean,
     viewModel: ArViewModel,
     cameraNode: ARCameraNode,
@@ -170,7 +180,8 @@ private fun ARSceneScope.PlacedDevice(
     cardScale: Float,
 ) {
     val states by viewModel.states.collectAsState()
-    val state = states[device.id] ?: DeviceState.Unavailable
+    val state = device?.let { states[it.id] } ?: DeviceState.Unavailable
+    val label = placement.label.ifBlank { device?.name ?: "marker" }
     val handle = remember { AnchorHandle() }
 
     AnchorNode(
@@ -178,25 +189,37 @@ private fun ARSceneScope.PlacedDevice(
         // ARCore pauses anchors for a few seconds whenever it re-evaluates their plane; keep
         // the device where it was last seen rather than blinking it out.
         visibleTrackingStates = setOf(TrackingState.TRACKING, TrackingState.PAUSED),
-        onTrackingStateChanged = { Log.d(TAG, "${device.name}: anchor $it") },
+        onTrackingStateChanged = { Log.d(TAG, "$label: anchor $it") },
         apply = {
-            handle.node = this
+            handle.anchor = this
             name = PLACEMENT_NAME_PREFIX + placement.id
-            // Real devices have one size; let the user move and turn them, never resize.
+            // The anchor owns only the position: ARCore rewrites its pose (rotation included)
+            // on every tracked frame, so a twist applied here would be undone a frame later.
+            isRotationEditable = false
             isScaleEditable = false
             moveHitTest = { frame, event -> surfaceHit(frame, event) }
         },
     ) {
         // `apply` runs once; editability follows the mode from then on.
-        LaunchedEffect(editing) { handle.node?.isEditable = editing }
+        LaunchedEffect(editing) { handle.anchor?.isEditable = editing }
 
-        DeviceGeometry(device.kind, state)
+        // The body owns rotation and scale. Drags on it bubble up to the anchor because it is
+        // not position-editable; twists and pinches stop here.
+        Node(
+            isEditable = editing,
+            apply = {
+                isPositionEditable = false
+                editableScaleRange = 0.5f..3f
+            },
+        ) {
+            DeviceGeometry(device?.kind, state)
+        }
 
-        if (selected) {
+        if (showCard) {
             ViewNode(
                 windowManager = viewNodeManager,
                 unlit = true,
-                position = Position(y = device.kind.cardLiftMetres),
+                position = Position(y = device?.kind.cardLiftMetres),
                 scale = Scale(cardScale),
                 apply = {
                     onFrame = { _ ->
@@ -213,7 +236,7 @@ private fun ARSceneScope.PlacedDevice(
                     }
                 },
             ) {
-                DeviceCard(device = device, viewModel = viewModel, placementId = placement.id)
+                DeviceCard(placementId = placement.id, viewModel = viewModel)
             }
         }
     }
@@ -221,26 +244,27 @@ private fun ARSceneScope.PlacedDevice(
 
 /** Lets composition-time effects reach the node that `apply` created. */
 private class AnchorHandle {
-    var node: AnchorNode? = null
+    var anchor: AnchorNode? = null
 }
 
-private val DeviceKind.cardLiftMetres: Float
+private val DeviceKind?.cardLiftMetres: Float
     get() = when (this) {
         DeviceKind.PLUG -> 0.16f
         DeviceKind.LIGHT -> 0.36f
         DeviceKind.SENSOR -> 0.16f
+        null -> 0.24f
     }
 
 private fun hintFor(
     mode: ArMode,
-    pending: Device?,
+    placing: Boolean,
     nothingPlaced: Boolean,
     trackingFailure: TrackingFailureReason?,
 ): String = when {
     trackingFailure != null -> trackingFailure.userMessage
-    mode == ArMode.EDIT && pending != null -> "Tap a surface to place ${pending.name}"
-    mode == ArMode.EDIT && nothingPlaced -> "Pick a device below, then tap where it lives"
-    mode == ArMode.EDIT -> "Tap a device to move or remove it"
+    placing -> "Tap a surface to put a marker there"
+    mode == ArMode.EDIT && nothingPlaced -> "Add a marker where a device lives, then tell it which one"
+    mode == ArMode.EDIT -> "Tap a marker to name it, assign a device, or remove it"
     nothingPlaced -> "Switch to Edit to place devices"
     else -> "Tap a device to control it"
 }
@@ -260,9 +284,8 @@ private fun ArOverlay(
     mode: ArMode,
     onMode: (ArMode) -> Unit,
     backendName: String,
-    devices: List<Device>,
-    pendingDeviceId: String?,
-    onChoose: (String) -> Unit,
+    placing: Boolean,
+    onTogglePlacing: () -> Unit,
     hint: String,
     error: String?,
 ) {
@@ -303,19 +326,12 @@ private fun ArOverlay(
         }
 
         if (mode == ArMode.EDIT) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(devices, key = { it.id }) { device ->
-                    FilterChip(
-                        selected = device.id == pendingDeviceId,
-                        onClick = { onChoose(device.id) },
-                        label = { Text(device.name) },
-                    )
-                }
-            }
+            FilterChip(
+                selected = placing,
+                onClick = onTogglePlacing,
+                label = { Text(if (placing) "Cancel" else "Add marker") },
+                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+            )
         }
     }
 }

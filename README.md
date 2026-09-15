@@ -21,9 +21,9 @@ demo without any hardware. The 2019 code is preserved at the git tag
 Grab the APK from the [latest release](https://github.com/jehelmich/deixis/releases) or build
 it yourself (below). It starts against the simulated home:
 
-- **AR tab** — *Edit* mode: pick a device from the chips, tap a detected surface to place
-  it, drag it around, twist to rotate, tap its card to remove it. *Use* mode: tap a device
-  to open its card and flip switches. Needs a phone with
+- **AR tab** — *Edit* mode: add a marker where a device lives, then name it and pick which
+  backend device it stands for; drag to move, twist to rotate, pinch to resize. *Use* mode:
+  tap a device to open its card and flip switches. Needs a phone with
   [ARCore support](https://developers.google.com/ar/devices).
 - **Devices tab** — the same devices and controls as a plain list. Works on anything,
   including an emulator, and is the quickest way to see the backend doing something.
@@ -49,11 +49,14 @@ it yourself (below). It starts against the simulated home:
 ```
 
 The AR screen is a [SceneView](https://github.com/sceneview/sceneview) `ARSceneView`. Each
-placed device is an `AnchorNode` on an ARCore anchor, carrying primitive geometry (a bulb, a
-plug, a sensor box) whose colour reacts to state, and — when selected — a `ViewNode` that
-renders an ordinary Compose card in 3D and keeps it facing the camera. Editing is SceneView's
-own gesture handling on the anchor node: drag re-hit-tests against the detected planes,
-rotation is a two-finger twist, scale is locked because real devices have one size.
+marker is an `AnchorNode` on an ARCore anchor. Where it is and what it is are decided
+separately: the anchor comes from tapping a surface, the binding to a backend device from a
+dropdown afterwards, and the marker's shape follows that binding — a pin until assigned, then
+a bulb, a plug or a sensor box whose colour reacts to state. In Use mode a selected marker
+carries a `ViewNode` that renders an ordinary Compose card in 3D and keeps it facing the
+camera. Editing is SceneView's own gesture handling: the anchor owns position (drags
+re-hit-test against the detected planes), a child node owns rotation and scale, because
+ARCore rewrites the anchor's pose every frame.
 
 Everything below the UI talks to one interface, `SmartHomeRepository`. The simulated
 implementation ticks plausible readings; the Home Assistant one polls the REST API while
@@ -99,8 +102,8 @@ University work from 2019, rewritten in September 2026. What is and is not verif
   simulated backend, the Home Assistant entity mapping, the HTTP client and the polling
   repository are all covered; the last two against a mock server.
 - **AR interaction has been tried on one phone** (Galaxy Z Flip6, Android 16, ARCore 1.56):
-  placing on a desk, selecting, toggling from the floating card, dragging and mode switching
-  all work. Not yet checked: vertical surfaces, several devices at once, Home Assistant
+  placing on a desk, naming and binding markers, selecting, toggling from the floating card,
+  drag / twist / pinch and mode switching all work. Not yet checked: vertical surfaces, several devices at once, Home Assistant
   against a live instance, and anything other than that one device. Two things found on the
   first run are documented in the code — SceneView `ViewNode`s need an explicit per-frame
   invalidate to show state changes, and ARCore pauses anchors often enough that a paused

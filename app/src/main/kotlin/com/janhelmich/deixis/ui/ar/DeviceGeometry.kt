@@ -24,12 +24,21 @@ import io.github.sceneview.math.Size
  * gestures bubble up to the anchor node because the shapes themselves are not editable.
  */
 @Composable
-fun SceneScope.DeviceGeometry(kind: DeviceKind, state: DeviceState) {
+fun SceneScope.DeviceGeometry(kind: DeviceKind?, state: DeviceState) {
     when (kind) {
         DeviceKind.PLUG -> PlugGeometry(state as? DeviceState.Plug)
         DeviceKind.LIGHT -> LightGeometry(state as? DeviceState.Light)
         DeviceKind.SENSOR -> SensorGeometry(state as? DeviceState.Sensor)
+        null -> MarkerGeometry()
     }
+}
+
+/** A marker that has not been assigned a device yet: a pin, so it reads as "something goes here". */
+@Composable
+private fun SceneScope.MarkerGeometry() {
+    val pin = rememberColorMaterial(Palette.Marker, metallic = 0.2f, roughness = 0.5f)
+    CylinderNode(radius = 0.004f, height = 0.09f, position = Position(y = 0.045f), materialInstance = pin)
+    SphereNode(radius = 0.02f, position = Position(y = 0.10f), materialInstance = pin)
 }
 
 @Composable
@@ -111,4 +120,5 @@ private object Palette {
     val BulbDim = Color(0xFFFFE0A3)
     val BulbBright = Color(0xFFFFF4D6)
     val Fault = Color(0xFFB00020)
+    val Marker = Color(0xFF3D8BFF)
 }

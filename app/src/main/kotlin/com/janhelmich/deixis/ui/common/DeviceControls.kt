@@ -33,6 +33,8 @@ fun DeviceControls(
     onToggle: () -> Unit,
     onBrightness: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    /** What to call it — a placement's own label, if the user gave it one. */
+    title: String = device.name,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -41,9 +43,9 @@ fun DeviceControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(device.name, style = MaterialTheme.typography.titleMedium)
+                Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    device.kind.label,
+                    if (title == device.name) device.kind.label else "${device.kind.label} · ${device.name}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

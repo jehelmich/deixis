@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -25,8 +24,17 @@ import java.util.UUID
  */
 enum class ArMode { USE, EDIT }
 
-/** A device pinned to a real-world spot. [anchor] belongs to the current ARCore session. */
-class Placement(val id: String, val deviceId: String, val anchor: Anchor)
+/**
+ * A spot in the room the user has marked. Where it is ([anchor]) is decided by tapping a
+ * surface; what it is ([deviceId]) and what to call it ([label]) are set afterwards, so a
+ * marker can be placed before it is known which backend device it stands for.
+ */
+data class Placement(
+    val id: String,
+    val anchor: Anchor,
+    val label: String = "",
+    val deviceId: String? = null,
+)
 
 /**
  * Scene state for [ArScreen]. Placements live here rather than in the composition so they
@@ -57,36 +65,32 @@ class ArViewModel(private val repository: StateFlow<SmartHomeRepository>) : View
     private val _placements = MutableStateFlow<List<Placement>>(emptyList())
     val placements: StateFlow<List<Placement>> = _placements.asStateFlow()
 
-    /** Placements whose device still exists on the backend, paired with that device. */
-    val placedDevices: StateFlow<List<Pair<Placement, Device>>> =
-        combine(_placements, devices) { placements, devices ->
-            val byId = devices.associateBy { it.id }
-            placements.mapNotNull { p -> byId[p.deviceId]?.let { p to it } }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     private val _selectedId = MutableStateFlow<String?>(null)
     val selectedId: StateFlow<String?> = _selectedId.asStateFlow()
 
-    /** Device picked from the palette, waiting for the user to tap a surface. */
-    private val _pendingDeviceId = MutableStateFlow<String?>(null)
-    val pendingDeviceId: StateFlow<String?> = _pendingDeviceId.asStateFlow()
+    /** True while the user has asked to add a marker and has yet to tap a surface. */
+    private val _placing = MutableStateFlow(false)
+    val placing: StateFlow<Boolean> = _placing.asStateFlow()
 
     fun setMode(mode: ArMode) {
         _mode.value = mode
-        if (mode == ArMode.USE) _pendingDeviceId.value = null
+        if (mode == ArMode.USE) _placing.value = false
     }
 
-    /** Pick a device to place next; picking it again cancels. */
-    fun choose(deviceId: String) {
-        _pendingDeviceId.update { if (it == deviceId) null else deviceId }
+    fun togglePlacing() {
+        _placing.update { !it }
+        if (_placing.value) _selectedId.value = null
     }
 
-    /** Pin the pending device at [anchor]. Returns false (and detaches) if nothing was pending. */
+    /** Pin a new, unbound marker at [anchor]. Returns false (and detaches) if not placing. */
     fun place(anchor: Anchor): Boolean {
-        val deviceId = _pendingDeviceId.value ?: run { anchor.detach(); return false }
-        val placement = Placement(UUID.randomUUID().toString(), deviceId, anchor)
+        if (!_placing.value) {
+            anchor.detach()
+            return false
+        }
+        val placement = Placement(UUID.randomUUID().toString(), anchor)
         _placements.update { it + placement }
-        _pendingDeviceId.value = null
+        _placing.value = false
         _selectedId.value = placement.id
         return true
     }
@@ -94,6 +98,15 @@ class ArViewModel(private val repository: StateFlow<SmartHomeRepository>) : View
     fun select(placementId: String?) {
         _selectedId.update { if (it == placementId) null else placementId }
     }
+
+    fun deselect() {
+        _selectedId.value = null
+    }
+
+    fun rename(placementId: String, label: String) = edit(placementId) { it.copy(label = label) }
+
+    /** Bind the marker to a backend device, or `null` to leave it unassigned. */
+    fun bind(placementId: String, deviceId: String?) = edit(placementId) { it.copy(deviceId = deviceId) }
 
     fun remove(placementId: String) {
         _placements.update { list ->
@@ -109,6 +122,10 @@ class ArViewModel(private val repository: StateFlow<SmartHomeRepository>) : View
 
     fun setBrightness(deviceId: String, brightness: Float) =
         viewModelScope.launch { repository.value.setBrightness(deviceId, brightness) }
+
+    private fun edit(placementId: String, transform: (Placement) -> Placement) {
+        _placements.update { list -> list.map { if (it.id == placementId) transform(it) else it } }
+    }
 
     override fun onCleared() {
         _placements.value.forEach { it.anchor.detach() }
