@@ -35,6 +35,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
+import com.google.ar.core.Session
+import com.janhelmich.deixis.data.relocalization.AlignmentStatus
+import com.janhelmich.deixis.relocalization.AnchoringSession
+import com.janhelmich.deixis.relocalization.toPose
+import com.janhelmich.deixis.relocalization.toMat4
+import dev.romainguy.kotlin.math.inverse
+import dev.romainguy.kotlin.math.Mat4
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import com.google.ar.core.Plane
 import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
@@ -100,6 +109,24 @@ fun ArScreen(viewModel: ArViewModel) {
     var tracking by remember { mutableStateOf(false) }
     var trackingFailure by remember { mutableStateOf<TrackingFailureReason?>(null) }
 
+    // Long-lived anchoring (docs/anchoring.md): capture while editing, recognise whenever a saved
+    // map exists, restore/re-anchor markers through the view model.
+    val context = LocalContext.current
+    val anchoring = remember { AnchoringSession(context) }
+    var arSession by remember { mutableStateOf<Session?>(null) }
+    val anchoringStatus by anchoring.status.collectAsStateWithLifecycle()
+    val keyframes by anchoring.keyframes.collectAsStateWithLifecycle()
+    val hasMap by anchoring.hasMap.collectAsStateWithLifecycle()
+    val anchoringNote by anchoring.note.collectAsStateWithLifecycle()
+    var saveMessage by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(anchoring) {
+        anchoring.onRestore = { markers -> viewModel.restore(markers) { pose -> arSession?.createAnchor(pose.toPose()) } }
+        anchoring.onCorrection = { markers -> viewModel.applyCorrections(markers) }
+        anchoring.onReanchor = { markers -> viewModel.reanchor(markers) { pose -> arSession?.createAnchor(pose.toPose()) } }
+        anchoring.loadIfPresent()
+        onDispose { anchoring.close() }
+    }
+
     // A ViewNode is laid out in pixels; scale it so the card is CARD_WIDTH_METRES wide in the
     // room regardless of the phone's density.
     val density = LocalDensity.current
@@ -117,9 +144,14 @@ fun ArScreen(viewModel: ArViewModel) {
             viewNodeWindowManager = viewNodeManager,
             planeRenderer = mode == ArMode.EDIT,
             planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL,
+            // Depth gives every captured feature a metric 3-D point; SceneView downgrades cleanly
+            // on devices without it (then maps cannot be built, and the status says so).
+            depthMode = Config.DepthMode.AUTOMATIC,
+            onSessionCreated = { arSession = it },
             onSessionUpdated = { _, frame ->
                 latestFrame = frame
                 tracking = frame.camera.trackingState == TrackingState.TRACKING
+                if (tracking) anchoring.onFrame(frame, capturing = viewModel.mode.value == ArMode.EDIT, nowNanos = System.nanoTime())
             },
             onTrackingFailureChanged = { trackingFailure = it },
             onGestureListener = rememberOnGestureListener(
@@ -128,12 +160,14 @@ fun ArScreen(viewModel: ArViewModel) {
                 // to it, so only handle the case where it is not.
                 onScale = { detector, _, node ->
                     selectedBodyFor(node, viewModel, handles)?.let { body ->
+                        viewModel.selectedId.value?.let(viewModel::markMoved)
                         val damped = 1f + (detector.scaleFactor - 1f) * body.scaleGestureSensitivity
                         body.scale = Scale((body.scale.x * damped).coerceIn(body.editableScaleRange))
                     }
                 },
                 onRotate = { detector, _, node ->
                     selectedBodyFor(node, viewModel, handles)?.let { body ->
+                        viewModel.selectedId.value?.let(viewModel::markMoved)
                         val delta = detector.currentAngle - detector.lastAngle
                         body.quaternion *= Quaternion.fromAxisAngle(Float3(y = 1f), degrees(-delta))
                     }
@@ -155,7 +189,9 @@ fun ArScreen(viewModel: ArViewModel) {
             ),
         ) {
             placements.forEach { placement ->
-                key(placement.id) {
+                // Keyed on the anchor too: a re-anchor must rebuild the whole node subtree, or
+                // the remembered child nodes stay attached to the destroyed parent.
+                key(placement.id, placement.anchor) {
                     PlacedDevice(
                         placement = placement,
                         device = placement.deviceId?.let { id -> devices.firstOrNull { it.id == id } },
@@ -182,7 +218,16 @@ fun ArScreen(viewModel: ArViewModel) {
             placing = placing,
             onTogglePlacing = viewModel::togglePlacing,
             hint = hintFor(mode, placing, placements.isEmpty(), trackingFailure),
-            error = error,
+            error = error ?: anchoringNote,
+            anchoring = anchoringLabel(anchoring.available, hasMap, anchoringStatus, keyframes, mode),
+            saveRoom = if (mode == ArMode.EDIT && anchoring.available && placements.isNotEmpty()) {
+                {
+                    saveMessage = anchoring.save(viewModel.markerPoses(), System.nanoTime())
+                        .onSuccess { viewModel.markSaved() }
+                        .fold({ it }, { "Could not save: ${it.message}" })
+                }
+            } else null,
+            saveMessage = saveMessage,
             panel = if (mode == ArMode.EDIT && selected != null) {
                 {
                     // Configuration for the selected marker; the scene stays live behind it.
@@ -214,6 +259,8 @@ private fun ARSceneScope.PlacedDevice(
     cardScale: Float,
 ) {
     val states by viewModel.states.collectAsState()
+    val corrections by viewModel.corrections.collectAsState()
+    val desiredPose = corrections[placement.id]
     val state = device?.let { states[it.id] } ?: DeviceState.Unavailable
     val label = placement.label.ifBlank { device?.name ?: "marker" }
     // Only the selected marker takes gestures, and only while arranging the room.
@@ -233,27 +280,48 @@ private fun ARSceneScope.PlacedDevice(
             isRotationEditable = false
             isScaleEditable = false
             moveHitTest = { frame, event -> surfaceHit(frame, event) }
+            onMoveEnd = { _, _ -> viewModel.markMoved(placement.id) }
         },
     ) {
         // `apply` runs once; editability follows selection and mode from then on.
         LaunchedEffect(editable) { handle.anchor?.isEditable = editable }
 
-        if (selected) SelectionRing()
-
-        // The body owns rotation and scale. Drags on it bubble up to the anchor because it is
-        // not position-editable; twists and pinches stop here.
+        // The alignment loop's corrections are applied here as a smoothed offset from the
+        // anchor, so a restored device glides into its corrected place instead of jumping —
+        // the anchor (and ARCore's tracking of it) stays put. In Edit mode the offset is zero so
+        // the user's drags are not fought.
+        LaunchedEffect(desiredPose, mode) {
+            val node = handle.correction ?: return@LaunchedEffect
+            val local = if (desiredPose != null && mode == ArMode.USE) {
+                inverse(placement.anchor.pose.toMat4()) * desiredPose
+            } else Mat4.identity()
+            node.transform(local, smooth = true)
+        }
         Node(
-            isEditable = editable,
             apply = {
-                handle.body = this
-                isPositionEditable = false
-                editableScaleRange = 0.5f..3f
-                // A quarter of the pinch delta per event; the default half felt jumpy.
-                scaleGestureSensitivity = 0.25f
+                handle.correction = this
+                isSmoothTransformEnabled = true
+                smoothTransformSpeed = 3f
             },
         ) {
-            DeviceGeometry(device?.kind, state)
-        }
+            if (selected) SelectionRing()
+
+            // The body owns rotation and scale. Drags on it bubble up to the anchor because it is
+            // not position-editable; twists and pinches stop here.
+            Node(
+                isEditable = editable,
+                apply = {
+                    handle.body = this
+                    isPositionEditable = false
+                    editableScaleRange = 0.5f..3f
+                    // A quarter of the pinch delta per event; the default half felt jumpy.
+                    scaleGestureSensitivity = 0.25f
+                    onRotateEnd = { _, _ -> viewModel.markMoved(placement.id) }
+                    onScaleEnd = { _, _ -> viewModel.markMoved(placement.id) }
+                },
+            ) {
+                DeviceGeometry(device?.kind, state)
+            }
 
         if (selected && mode == ArMode.USE) {
             ViewNode(
@@ -305,6 +373,7 @@ private fun ARSceneScope.PlacedDevice(
                 DeviceCard(placementId = placement.id, viewModel = viewModel)
             }
         }
+        } // correction node
     }
 }
 
@@ -326,6 +395,7 @@ private fun selectedBodyFor(
 /** Lets composition-time effects and the card reach the nodes that `apply` created. */
 private class AnchorHandle {
     var anchor: AnchorNode? = null
+    var correction: Node? = null
     var body: Node? = null
 }
 
@@ -337,6 +407,20 @@ private val DeviceKind?.bodyTopMetres: Float
         DeviceKind.SENSOR -> 0.07f
         null -> 0.12f
     }
+
+/** The anchoring status pill: what the loop is doing, in the user's terms. */
+private fun anchoringLabel(available: Boolean, hasMap: Boolean, status: AlignmentStatus, keyframes: Int, mode: ArMode): String {
+    if (!available) return "Anchoring unavailable"
+    val capture = if (mode == ArMode.EDIT) " · $keyframes views captured" else ""
+    val recog = when {
+        !hasMap -> "No saved room"
+        status is AlignmentStatus.Searching -> "Looking for the room…"
+        status is AlignmentStatus.Locked -> "Room recognised (${status.inliers} matches)"
+        status is AlignmentStatus.Coasting -> "Room recognised · re-checking"
+        else -> ""
+    }
+    return recog + capture
+}
 
 private fun hintFor(
     mode: ArMode,
@@ -371,6 +455,9 @@ private fun ArOverlay(
     onTogglePlacing: () -> Unit,
     hint: String,
     error: String?,
+    anchoring: String,
+    saveRoom: (() -> Unit)? = null,
+    saveMessage: String? = null,
     panel: (@Composable () -> Unit)? = null,
 ) {
     Column(
@@ -394,6 +481,16 @@ private fun ArOverlay(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp),
         )
+        Text(
+            anchoring,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        saveMessage?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 2.dp))
+        }
 
         Box(Modifier.weight(1f))
 
@@ -411,12 +508,19 @@ private fun ArOverlay(
 
         when {
             panel != null -> panel()
-            mode == ArMode.EDIT -> FilterChip(
-                selected = placing,
-                onClick = onTogglePlacing,
-                label = { Text(if (placing) "Cancel" else "Add marker") },
-                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
-            )
+            mode == ArMode.EDIT -> androidx.compose.foundation.layout.Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = placing,
+                    onClick = onTogglePlacing,
+                    label = { Text(if (placing) "Cancel" else "Add marker") },
+                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                )
+                if (saveRoom != null) {
+                    FilterChip(selected = false, onClick = saveRoom, label = { Text("Save room") })
+                }
+            }
         }
     }
 }

@@ -36,3 +36,5 @@ jobs:
         with:
           files: deixis-*.apk
           generate_release_notes: true
+          # Tags carrying "experimental" are pre-releases: they work, but are not the stable line.
+          prerelease: ${{ contains(github.ref_name, 'experimental') }}

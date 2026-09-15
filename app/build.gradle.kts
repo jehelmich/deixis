@@ -16,10 +16,16 @@ android {
         // ARCore itself supports 24; SceneView's Filament build and the Compose stack want 28.
         minSdk = 28
         targetSdk = 37
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        // Experimental: on-device visual re-discovery anchoring (docs/anchoring.md). Works end to
+        // end on a Galaxy Z Flip6; still jittery, ORB-only. See the release notes.
+        versionName = "2.1.0-experimental.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Every ARCore-capable phone is arm64; shipping only that ABI keeps OpenCV's native
+        // libraries from tripling the APK.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -46,6 +52,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // arm64-only is deliberate: OpenCV's native libs are large and every ARCore phone is
+        // arm64, so the missing x86_64 ABI (for ChromeOS) is a conscious trade, not an oversight.
+        disable += "ChromeOsAbiSupport"
     }
 
     packaging {
@@ -89,6 +101,12 @@ dependencies {
     // AR: SceneView = ARCore (perception) + Filament (rendering) behind a Compose API.
     implementation(libs.sceneview.ar)
     implementation(libs.arcore)
+
+    // Offline relocalization (feature/offline-relocalization): the pure module, plus the
+    // Android build of OpenCV that provides its native code at runtime on the device.
+    implementation(project(":relocalization"))
+    implementation(libs.opencv)
+    implementation(libs.kotlin.math)
 
     // Tests
     testImplementation(libs.junit)
