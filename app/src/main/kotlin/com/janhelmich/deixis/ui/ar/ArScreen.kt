@@ -48,6 +48,11 @@ import io.github.sceneview.ar.node.AnchorNode
 import io.github.sceneview.ar.rememberARCameraNode
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Scale
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Quaternion
+import dev.romainguy.kotlin.math.degrees
+import io.github.sceneview.components.PRIORITY_LAST
+import io.github.sceneview.node.Node
 import io.github.sceneview.node.ViewNode
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberMaterialLoader
@@ -59,6 +64,12 @@ private const val TAG = "DeixisAR"
 
 /** How wide the floating card should appear in the room, in metres. */
 private const val CARD_WIDTH_METRES = 0.30f
+
+/** How far in front of the device (towards the viewer) the card floats, at body scale 1. */
+private const val CARD_STANDOFF_METRES = 0.12f
+
+/** Clearance between the top of the body and the bottom edge of the card. */
+private const val CARD_GAP_METRES = 0.03f
 
 /** SceneView's default pixel density for a ViewNode: 250 px per scene unit (metre). */
 private const val VIEW_NODE_PX_PER_METRE = 250f
@@ -72,6 +83,10 @@ fun ArScreen(viewModel: ArViewModel) {
     val placing by viewModel.placing.collectAsStateWithLifecycle()
     val backendName by viewModel.backendName.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+
+    // One handle per placement so scene-level gestures can reach the selected marker's nodes.
+    val handles = remember { mutableMapOf<String, AnchorHandle>() }
+    LaunchedEffect(placements) { handles.keys.retainAll(placements.mapTo(HashSet()) { it.id }) }
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
@@ -108,6 +123,21 @@ fun ArScreen(viewModel: ArViewModel) {
             },
             onTrackingFailureChanged = { trackingFailure = it },
             onGestureListener = rememberOnGestureListener(
+                // Pinch and twist act on the selected marker from anywhere on the screen. When a
+                // finger is on the selected marker itself SceneView already applies the gesture
+                // to it, so only handle the case where it is not.
+                onScale = { detector, _, node ->
+                    selectedBodyFor(node, viewModel, handles)?.let { body ->
+                        val damped = 1f + (detector.scaleFactor - 1f) * body.scaleGestureSensitivity
+                        body.scale = Scale((body.scale.x * damped).coerceIn(body.editableScaleRange))
+                    }
+                },
+                onRotate = { detector, _, node ->
+                    selectedBodyFor(node, viewModel, handles)?.let { body ->
+                        val delta = detector.currentAngle - detector.lastAngle
+                        body.quaternion *= Quaternion.fromAxisAngle(Float3(y = 1f), degrees(-delta))
+                    }
+                },
                 onSingleTapConfirmed = { event: MotionEvent, node ->
                     val tapped = node?.placementId()
                     Log.d(TAG, "tap: node=${node?.let { it::class.simpleName }} placement=$tapped")
@@ -131,6 +161,7 @@ fun ArScreen(viewModel: ArViewModel) {
                         device = placement.deviceId?.let { id -> devices.firstOrNull { it.id == id } },
                         selected = placement.id == selectedId,
                         mode = mode,
+                        handle = handles.getOrPut(placement.id) { AnchorHandle() },
                         viewModel = viewModel,
                         cameraNode = cameraNode,
                         viewNodeManager = viewNodeManager,
@@ -176,6 +207,7 @@ private fun ARSceneScope.PlacedDevice(
     device: Device?,
     selected: Boolean,
     mode: ArMode,
+    handle: AnchorHandle,
     viewModel: ArViewModel,
     cameraNode: ARCameraNode,
     viewNodeManager: ViewNode.WindowManager,
@@ -184,7 +216,6 @@ private fun ARSceneScope.PlacedDevice(
     val states by viewModel.states.collectAsState()
     val state = device?.let { states[it.id] } ?: DeviceState.Unavailable
     val label = placement.label.ifBlank { device?.name ?: "marker" }
-    val handle = remember { AnchorHandle() }
     // Only the selected marker takes gestures, and only while arranging the room.
     val editable = mode == ArMode.EDIT && selected
 
@@ -214,8 +245,11 @@ private fun ARSceneScope.PlacedDevice(
         Node(
             isEditable = editable,
             apply = {
+                handle.body = this
                 isPositionEditable = false
                 editableScaleRange = 0.5f..3f
+                // A quarter of the pinch delta per event; the default half felt jumpy.
+                scaleGestureSensitivity = 0.25f
             },
         ) {
             DeviceGeometry(device?.kind, state)
@@ -225,10 +259,36 @@ private fun ARSceneScope.PlacedDevice(
             ViewNode(
                 windowManager = viewNodeManager,
                 unlit = true,
-                position = Position(y = device?.kind.cardLiftMetres),
                 scale = Scale(cardScale),
                 apply = {
-                    onFrame = { _ ->
+                    // Nothing in the room may hide the controls: skip the depth test and
+                    // draw in Filament's last priority bucket, after every other renderable.
+                    materialInstance.setDepthCulling(false)
+                    setPriority(PRIORITY_LAST)
+                    onFrame = frame@{ _ ->
+                        val body = handle.body
+                        val anchorPos = parent?.worldPosition ?: return@frame
+                        // Sit above the body — which may have been pinched larger — and
+                        // step towards the camera so the card floats in front of it.
+                        val bodyScale = body?.scale?.y ?: 1f
+                        // The card is opaque over anything behind it (no depth test), so its
+                        // bottom edge must clear the top of the body, whatever the pinch scale.
+                        val cardHalfHeight = if (viewSize.y > 0f) {
+                            viewSize.y / pxPerUnits * cardScale / 2f
+                        } else {
+                            0.14f
+                        }
+                        val lift = device?.kind.bodyTopMetres * bodyScale + cardHalfHeight + CARD_GAP_METRES
+                        val toCamera = cameraNode.worldPosition - anchorPos
+                        val flat = Position(toCamera.x, 0f, toCamera.z)
+                        val length = kotlin.math.sqrt(flat.x * flat.x + flat.z * flat.z)
+                        val forward = if (length > 1e-4f) flat / length else Position(0f, 0f, 1f)
+                        val standoff = CARD_STANDOFF_METRES * bodyScale
+                        worldPosition = Position(
+                            anchorPos.x + forward.x * standoff,
+                            anchorPos.y + lift,
+                            anchorPos.z + forward.z * standoff,
+                        )
                         // Face the camera every frame so the card is readable from anywhere.
                         val toCard = worldPosition - cameraNode.worldPosition
                         if (toCard.x * toCard.x + toCard.y * toCard.y + toCard.z * toCard.z > 1e-6f) {
@@ -248,17 +308,34 @@ private fun ARSceneScope.PlacedDevice(
     }
 }
 
-/** Lets composition-time effects reach the node that `apply` created. */
-private class AnchorHandle {
-    var anchor: AnchorNode? = null
+/**
+ * The body node a scene-level pinch or twist should act on: the selected marker's, in Edit
+ * mode, unless the gesture started on that marker (then SceneView handles it itself).
+ */
+private fun selectedBodyFor(
+    touched: Node?,
+    viewModel: ArViewModel,
+    handles: Map<String, AnchorHandle>,
+): Node? {
+    if (viewModel.mode.value != ArMode.EDIT) return null
+    val selectedId = viewModel.selectedId.value ?: return null
+    if (touched?.placementId() == selectedId) return null
+    return handles[selectedId]?.body
 }
 
-private val DeviceKind?.cardLiftMetres: Float
+/** Lets composition-time effects and the card reach the nodes that `apply` created. */
+private class AnchorHandle {
+    var anchor: AnchorNode? = null
+    var body: Node? = null
+}
+
+/** Height of each body's highest point at scale 1 — see [DeviceGeometry]. */
+private val DeviceKind?.bodyTopMetres: Float
     get() = when (this) {
-        DeviceKind.PLUG -> 0.16f
-        DeviceKind.LIGHT -> 0.36f
-        DeviceKind.SENSOR -> 0.16f
-        null -> 0.24f
+        DeviceKind.PLUG -> 0.051f
+        DeviceKind.LIGHT -> 0.235f
+        DeviceKind.SENSOR -> 0.07f
+        null -> 0.12f
     }
 
 private fun hintFor(

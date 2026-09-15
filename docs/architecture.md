@@ -83,10 +83,19 @@ is even configured.
 - **Visibility.** ARCore pauses an anchor for seconds at a time while it re-evaluates the
   plane underneath; `visibleTrackingStates` includes `PAUSED` so the device stays where it
   was last seen instead of blinking out.
+- **Gestures anywhere.** SceneView only routes a pinch or twist to the node under the
+  first finger. The scene-level gesture listener also receives them, with the touched node
+  (or `null`), so `ArScreen` applies them to the selected marker's body itself whenever the
+  gesture did not start on that marker — a selected device can be resized and turned from
+  anywhere on the screen. Drags still start on the marker, since a drag moves it to the
+  finger's hit point.
 - **Cards.** A `ViewNode` renders a Compose tree onto a textured quad at 250 px per metre.
   `DeviceCard` is a fixed 240 dp wide, so `ArScreen` computes the scale that makes it
-  0.30 m in the room whatever the phone's density. `onFrame` turns it towards the camera and
-  invalidates the card's hidden window: the texture is refilled from that window's
+  0.30 m in the room whatever the phone's density. Every frame the card is placed just
+  above the top of the (possibly pinch-scaled) body and stepped towards the camera, drawn
+  with depth testing off in Filament's last priority bucket so nothing in the room can
+  cover the controls — which is also why it must clear the body rather than overlap it.
+  `onFrame` turns it towards the camera and invalidates the card's hidden window: the texture is refilled from that window's
   `dispatchDraw`, which a hardware-accelerated window only re-runs when the container itself
   is dirty, so without the invalidate a flipped switch never shows. The `ViewNode` hosts a
   separate composition: no `CompositionLocal` from the screen reaches it, so the theme is
