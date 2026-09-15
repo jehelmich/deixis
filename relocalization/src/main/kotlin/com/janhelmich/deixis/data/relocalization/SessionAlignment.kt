@@ -25,9 +25,13 @@ data class AlignmentConfig(
     val maxGain: Float = 0.4f,
     /**
      * Constellation gate: a candidate that would move any marker further than this from where
-     * the current alignment puts it is treated as a wrong lock and rejected.
+     * the current alignment puts it is treated as a wrong lock and rejected. This is the gate
+     * for a candidate at [saturationInliers]; weaker candidates get a tighter one, down to
+     * [weakGateFraction] of it at [minInliers] — a noisy, low-confidence observation is not
+     * allowed to drag the constellation far, which is what jitter is.
      */
     val maxMarkerJumpMeters: Float = 0.35f,
+    val weakGateFraction: Float = 0.3f,
     /**
      * Re-bootstrap: if this many consecutive rejected candidates agree with *each other* (to
      * within [rebootstrapAgreementMeters] at the markers), the current alignment is the one
@@ -111,7 +115,9 @@ class SessionAlignment(
         }
 
         val jump = maxProbeDisplacement(cur, candidate)
-        if (jump > config.maxMarkerJumpMeters) {
+        val strength = strengthOf(inliers)
+        val gate = config.maxMarkerJumpMeters * (config.weakGateFraction + (1f - config.weakGateFraction) * strength)
+        if (jump > gate) {
             if (inliers >= config.rebootstrapMinInliers) rejectedRun += candidate else rejectedRun.clear()
             if (rejectedRun.size >= config.rebootstrapAfter && rejectedRunAgrees()) {
                 accept(candidate, inliers)
@@ -120,7 +126,7 @@ class SessionAlignment(
             return AlignmentDecision.RejectedInconsistent(jump)
         }
 
-        val gain = gainFor(inliers)
+        val gain = config.minGain + (config.maxGain - config.minGain) * strength
         current = blendPose(cur, candidate, gain)
         lastAcceptedInliers = inliers
         rejectedRun.clear()
@@ -146,11 +152,10 @@ class SessionAlignment(
         rejectedRun.clear()
     }
 
-    private fun gainFor(inliers: Int): Float {
-        val t = ((inliers - config.minInliers).toFloat() /
+    /** 0 at [AlignmentConfig.minInliers], 1 at [AlignmentConfig.saturationInliers]. */
+    private fun strengthOf(inliers: Int): Float =
+        ((inliers - config.minInliers).toFloat() /
             (config.saturationInliers - config.minInliers).coerceAtLeast(1)).coerceIn(0f, 1f)
-        return config.minGain + (config.maxGain - config.minGain) * t
-    }
 
     /** Largest distance any probe point moves between two alignments — the constellation metric. */
     fun maxProbeDisplacement(a: Mat4, b: Mat4): Float =

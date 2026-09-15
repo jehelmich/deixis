@@ -80,6 +80,19 @@ class SessionAlignmentTest {
     }
 
     @Test
+    fun `the consistency gate tightens for weak candidates`() {
+        // A 25 cm disagreement at the markers: a strong candidate may correct that much, a weak
+        // one may not — with few inliers it is more likely noise than drift.
+        val far = translation(Float3(0.25f, 0f, 0f))
+        val weak = bootstrapped()
+        assertIs<AlignmentDecision.RejectedInconsistent>(weak.propose(far, inliers = 16))
+        assertEquals(0f, weak.current!!.translation.x, 1e-6f)
+        val strong = bootstrapped()
+        assertIs<AlignmentDecision.Blended>(strong.propose(far, inliers = 90))
+        assertTrue(strong.current!!.translation.x > 0.05f)
+    }
+
+    @Test
     fun `a repeatable but weak wrong lock cannot vote itself in`() {
         val a = bootstrapped(AlignmentConfig(rebootstrapAfter = 3, rebootstrapMinInliers = 35))
         val wrong = translation(Float3(3f, 0f, 1f))

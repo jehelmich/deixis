@@ -73,3 +73,17 @@ Legend: ✅ implemented and verified · 🔧 implemented, device verification pe
 | F1 | Replace ORB with XFeat (LiteRT `litert-community/xfeat-litert`) + LighterGlue behind `FeatureExtractor`; re-measure C5/C7. | ⏳ |
 | F2 | Run 7-Scenes for C6 numbers. | ⏳ |
 | F3 | Multi-map place recognition (which room?) — only once E7 is reliable in one room. | deferred by design |
+
+## Testing on the device, unwired
+
+Walking a room with a USB cable does not work, so device runs are done unplugged and read back
+afterwards from the phone's own log ring buffer:
+
+1. Plug in once, install the build (`./gradlew installDebug`), and enlarge the buffer:
+   `adb logcat -G 16M` (the Galaxy Z Flip6 caps it at 5 MiB ≈ 15 minutes of the app's output).
+2. Unplug, run the scenario (E7: save → kill → walk elsewhere → relaunch → look at the room).
+3. Plug back in **before doing anything else** and dump: `adb logcat -d -v time > run.log`.
+   The `DeixisAnchoring` lines carry every relocalization decision with inliers and the
+   resulting `T_session_map`, restore/re-anchor events and per-keyframe depth coverage — enough
+   to measure jitter (alignment movement between accepted corrections) and lock rate offline.
+
