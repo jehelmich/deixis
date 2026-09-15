@@ -25,8 +25,8 @@ Legend: ✅ implemented and verified · 🔧 implemented, device verification pe
 | B2 | Frames with too little texture are not stored; keyframe count is capped. | Below `minFeatures` refused; at cap refused. | S — `KeyframeSelectorTest` | ✅ |
 | B3 | Every stored feature has a reliable metric 3-D point; features without depth are dropped and descriptor rows stay aligned with points. | Dropped features leave no orphan descriptors. | S — `KeyframeBuilderTest` | ✅ |
 | B4 | Back-projection is geometrically exact (project ∘ unproject = identity; point returns to its world position). | Sub-1e-3 round trips. | S — `GeometryTest`, `SyntheticSceneTest` | ✅ |
-| B5 | Capture runs continuously in Edit mode with no explicit "start capture" step. | Looking around the room populates keyframes; a status readout shows the count. | D | 🔧 |
-| B6 | The user can save the current room (markers + keyframes) with one action. | Save writes a map; it appears on relaunch. | D | 🔧 |
+| B5 | Capture runs continuously in Edit mode with no explicit "start capture" step. | Looking around the room populates keyframes; a status readout shows the count. | D — Flip6 run 2026-09-15: 60 keyframes, 60 441 points; depth-from-motion needs ~3 s of movement before the first keyframe | ✅ |
+| B6 | The user can save the current room (markers + keyframes) with one action. | Save writes a map; it appears on relaunch. | D — `home.dxmap` 2.8 MB, loaded on relaunch | ✅ |
 
 ## C. Recognition
 
@@ -58,13 +58,13 @@ Legend: ✅ implemented and verified · 🔧 implemented, device verification pe
 
 | ID | Requirement | Acceptance | Verified | Status |
 |---|---|---|---|---|
-| E1 | On launch the saved map is loaded and recognition runs from the first frame; no explicit "load" step. | Open the app, look at the room, devices appear. | D | 🔧 |
-| E2 | On the first confirmed lock every marker is restored as an ARCore anchor at `T_S←M · P_M`, with its label and device binding. | Restored devices control their backend as before. | D | 🔧 |
-| E3 | Accepted corrections larger than a few centimetres re-anchor markers; smaller ones are absorbed by ARCore tracking. | Devices glide, never jump. | D | 🔧 |
-| E4 | The UI shows Searching / Locked (with confidence) / Coasting. | Status pill visible in the AR view. | D | 🔧 |
-| E5 | Relocalization runs off the render thread and does not stall the camera feed. | Frame rate stays smooth during recognition. | D | 🔧 |
-| E6 | If OpenCV cannot load, the app behaves exactly as before (no persistence) and says so. | Guarded by `OpenCvLoader`. | D | 🔧 |
-| E7 | Two consecutive runs: place devices, save, kill the app, relaunch from a different spot in the room (≤ 30° from a captured view), devices reappear within ~10 cm. | The headline device test. | D | ⏳ pending run |
+| E1 | On launch the saved map is loaded and recognition runs from the first frame; no explicit "load" step. | Open the app, look at the room, devices appear. | D — loaded at launch; first confirmed lock ~2 min into the run, 199 attempts, 83 % accepted, median 45 inliers | ✅ |
+| E2 | On the first confirmed lock every marker is restored as an ARCore anchor at `T_S←M · P_M`, with its label and device binding. | Restored devices control their backend as before. | D — restored 2 (then 3) markers; taps picked them; cards and switches worked (Home Assistant backend) | ✅ |
+| E3 | Corrections are applied as a smoothed offset from the anchor so devices glide; only corrections > 0.5 m recreate anchors. | Devices glide, never jump. | D — run 1 showed the failure (5 anchor recreations in 20 s, each ~5–7 cm = visible jumps); glide build installed, unwired verification pending | 🔧 |
+| E4 | The UI shows Searching / Locked (with confidence) / Coasting. | Status pill visible in the AR view. | D — observed on the run | ✅ |
+| E5 | Relocalization runs off the render thread and does not stall the camera feed. | Frame rate stays smooth during recognition. | D — worker thread, 2 attempts/s at 1920×1080 with 1200 ORB features; no stall reported | ✅ |
+| E6 | If OpenCV cannot load, the app behaves exactly as before (no persistence) and says so. | Guarded by `OpenCvLoader`. | D — OpenCV 4.14 loads natively on the Flip6 (arm64); the guard path is exercised in tests, not on a failing device | ✅ |
+| E7 | Two consecutive runs: place devices, save, kill the app, relaunch from a different spot in the room (≤ 30° from a captured view), devices reappear within ~10 cm. | The headline device test. | D — passed on the second run: devices came back and their controls worked; the first placement settled within ~6 cm over the following corrections. First run showed the initial placement shifted toward the session start (fixed: cumulative re-anchor, averaged bootstrap) | ✅ (jitter being tuned) |
 
 ## F. Upgrade path (tracked, not blocking)
 
