@@ -89,6 +89,45 @@ external mocap, so it measures **consistency** (does the device return to the sa
 rather than absolute accuracy. Layer 2 supplies the absolute numbers; layer 3 supplies the
 proof that the whole chain works end to end on a phone.
 
+## Measured: ORB is not viewpoint-robust enough; XFeat + LighterGlue is meaningfully better
+
+The load-bearing question is how much *viewpoint change* relocalization survives. Measured with
+the planar homography protocol above (`tools/viewpoint_bench.py`) on the same indoor image and
+the same simulated camera rotations — correct matches judged against the known homography:
+
+| viewpoint rotation | ORB (matches / correct / precision) | XFeat + LighterGlue |
+|---|---|---|
+| 10° | 492 / 430 / 87% | 986 / 937 / **95%** |
+| 20° | 291 / 224 / 77% | 685 / 611 / **89%** |
+| 30° | 116 / 67 / **58%** | 366 / 270 / **74%** |
+| 40° | 12 / 1 / **8%** (noise) | 24 / 13 / 54% |
+| 50° | 9 / 0 / 0% | 0 / 0 / 0% |
+
+Reading it honestly:
+
+- **ORB collapses into the wrong-lock regime by ~30°.** At 30° barely half its matches are
+  correct (58%), and by 40° it is pure noise (1 of 12). A relocalizer built on ORB would
+  confidently put artifacts in the wrong place — the "replace your devices every time" failure.
+- **XFeat + LighterGlue roughly doubles the correct matches and keeps precision usable further
+  out** — 74% at 30°, still 54% at 40° where ORB is dead. It moves the reliable envelope from
+  ~20° (ORB's precision-safe limit) to ~30–40°, and, crucially, avoids the wrong-lock regime.
+- **It is not magic.** Beyond ~40° of pure rotation on a hard, narrow scene even XFeat fails,
+  and this is the *optimistic* planar case. So learned features are necessary but not
+  sufficient on their own. (An earlier estimate of "50–60°" was too optimistic; these are the
+  measured numbers.)
+
+The consequence for the design: **learned features must be paired with multi-viewpoint capture.**
+If the map stores each feature's appearance from several angles (keyframes taken while the user
+looks around), then a query from a new position is always within ~30° of *some* stored view, and
+the effective recovery envelope is the union of those cones — which is how you get "walk in from
+anywhere and it recovers" rather than "stand where you captured." XFeat widens each cone; the
+multi-viewpoint map multiplies them. That combination, not the descriptor alone, is what makes
+within-space relocalization reliable.
+
+Licence/runtime for the plan: XFeat is Apache-2.0 and designed for mobile; an on-device model
+ships as `litert-community/xfeat-litert` (`.tflite`, runs on LiteRT 2.2), and LighterGlue is
+Apache-2.0. So the whole upgrade is permissive and has a real on-device path.
+
 ## What "good" looks like
 
 For a room-scale demo, returning a marker to within a few centimetres of a surface it sits on
