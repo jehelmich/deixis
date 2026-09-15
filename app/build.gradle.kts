@@ -20,6 +20,10 @@ android {
         versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Every ARCore-capable phone is arm64; shipping only that ABI keeps OpenCV's native
+        // libraries from tripling the APK.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -46,6 +50,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // arm64-only is deliberate: OpenCV's native libs are large and every ARCore phone is
+        // arm64, so the missing x86_64 ABI (for ChromeOS) is a conscious trade, not an oversight.
+        disable += "ChromeOsAbiSupport"
     }
 
     packaging {
@@ -89,6 +99,12 @@ dependencies {
     // AR: SceneView = ARCore (perception) + Filament (rendering) behind a Compose API.
     implementation(libs.sceneview.ar)
     implementation(libs.arcore)
+
+    // Offline relocalization (feature/offline-relocalization): ORB + PnP for rebuilding a
+    // saved room without Cloud Anchors. The math and map format are pure Kotlin; only the
+    // feature extractor touches OpenCV's native code.
+    implementation(libs.opencv)
+    implementation(libs.kotlin.math)
 
     // Tests
     testImplementation(libs.junit)

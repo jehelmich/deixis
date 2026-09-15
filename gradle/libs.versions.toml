@@ -23,6 +23,10 @@ ktor = "3.5.2"
 # AR
 # 4.36.0 is tagged on GitHub but had not reached Maven Central at the time of writing.
 sceneview = "4.35.0"
+# Offline relocalization: ORB features, descriptor matching and solvePnPRansac.
+opencv = "4.14.0"
+# Pinned directly (also pulled in transitively by SceneView) for the relocalization math.
+kotlinMath = "1.8.0"
 # SceneView 4.35 declares ARCore 1.54; pin the current release explicitly.
 arcore = "1.56.0"
 
@@ -60,6 +64,8 @@ ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref =
 
 sceneview-ar = { group = "io.github.sceneview", name = "arsceneview", version.ref = "sceneview" }
 arcore = { group = "com.google.ar", name = "core", version.ref = "arcore" }
+opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" }
+kotlin-math = { group = "dev.romainguy", name = "kotlin-math", version.ref = "kotlinMath" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlin-test-junit = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit", version.ref = "kotlin" }
