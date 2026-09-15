@@ -36,6 +36,9 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
 
+      - name: Relocalization tests (pure module + off-device OpenCV bench)
+        run: ./gradlew :relocalization:test :relocalization-bench:test
+
       - name: Assemble
         run: ./gradlew assembleDebug assembleRelease
 

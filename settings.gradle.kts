@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "deixis"
 include(":app")
+include(":relocalization")
+include(":relocalization-bench")

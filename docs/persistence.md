@@ -87,8 +87,10 @@ Given a saved map and a live frame:
    (`MarkerPose.inSession`), and each becomes a fresh ARCore anchor — the offline equivalent
    of a Cloud Anchor `resolve`.
 
-`Relocalizer` is the seam; the OpenCV implementation is the follow-up. The transform math it
-will feed is already written and tested.
+`Relocalizer` is the seam and `OrbRelocalizer` is the OpenCV implementation: brute-force
+Hamming matching with Lowe's ratio test, then `solvePnPRansac`, then the convention conversion
+(`cameraInMapFromPnp`). It returns the recovered camera pose and the map→session transform, or
+`NotFound` when too few matches agree — it never reports a low-confidence guess.
 
 ## Honest limits
 
@@ -117,5 +119,9 @@ back — and it does it without a cloud, an account, or a tag on the wall.
   back-projection and relocalization-transform math, keyframe builder (depth gating +
   descriptor alignment) — 12 JVM tests. OpenCV wired (arm64, `initLocal`) behind an
   availability check so the app is unaffected where it will not load.
-- **Next:** `OrbRelocalizer` (match → PnP), the capture loop in the AR screen, a maps
-  UI (save/name/load/delete), and rebuilding markers on load. Then measure it on the phone.
+- **Done, tested:** `OrbRelocalizer` (match → `solvePnPRansac` → convention conversion),
+  verified end to end on synthetic ground truth with real OpenCV off-device (recovers the
+  camera and marker to sub-millimetre; refuses to lock on an unrelated view). The convention
+  flip is pinned separately against hand-built poses.
+- **Next:** the capture loop in the AR screen, a maps UI (save/name/load/delete), rebuilding
+  markers on load, and running the 7-Scenes benchmark for accuracy numbers on real data.

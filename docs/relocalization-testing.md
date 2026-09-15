@@ -14,10 +14,19 @@ for this, at three levels, each answering a different question.
 
 A known cloud of 3D points projected into known camera poses with `CameraIntrinsics.project`
 manufactures 2D↔3D correspondences whose answer is exactly right, with no sensor noise. This
-pins the projection/back-projection inverse and the map→session transform, and is where the
-`solvePnPRansac` step gets its first correctness check — including deliberately injected pixel
-noise and outlier matches, to confirm RANSAC rejects them. See `SyntheticSceneTest`. Fast,
-deterministic, no dependencies; the correctness floor everything else stands on.
+pins the projection/back-projection inverse and the map→session transform (`SyntheticSceneTest`),
+and the OpenCV↔ARCore convention flip separately (`PnpConversionTest`). Fast, deterministic,
+no device; the correctness floor everything else stands on.
+
+### Layer 1.5 — the whole relocalizer on synthetic data (done)
+
+`SyntheticRelocalizationTest`, in the `:relocalization-bench` module, runs the **real**
+`OrbRelocalizer` — OpenCV descriptor matching and `solvePnPRansac` — off device against desktop
+OpenCV. Each 3D point gets a unique random descriptor; a "live" view reuses those descriptors at
+projected pixels, mixed with outliers. The relocalizer recovers the camera and a carried marker
+to **sub-millimetre** (95 inliers in the seeded case) and returns `NotFound` for an unrelated
+view. This proves the matching plumbing, the PnP call and the convention conversion end to end
+without a phone — the piece that most needed real execution, and it runs in CI.
 
 ## Layer 2 — a public relocalization benchmark (planned)
 
@@ -42,12 +51,22 @@ relocalizer and compare the recovered pose to ground truth.
 - **success rate** at the standard **5 cm / 5°** threshold;
 - inlier count distribution, as a health check on the matcher.
 
-**Harness.** A separate JVM module (`:relocalization-bench`) depending on the pure
-relocalization sources plus desktop OpenCV (`org.openpnp:opencv`, the same `org.opencv.*` API
-as the Android AAR but with desktop natives), so the identical matching code runs off-device.
-The dataset is downloaded and cached (it is large — one scene, not all seven, in CI), and the
-benchmark runs as a JUnit test that asserts error stays under a committed baseline, so a
-regression in the matcher shows up as a red build with a number attached.
+**Harness (built, gated on the data).** The `:relocalization-bench` module depends on the pure
+relocalization sources plus desktop OpenCV (`org.openpnp:opencv` — the same `org.opencv.*` API
+as the Android AAR, with mac/linux/win natives), so the identical matching code runs off-device.
+`SevenScenesBenchmarkTest` builds a `WorldMap` from a training sequence (ORB + depth
+back-projection, placed with the dataset's ground-truth poses) and localizes test-sequence
+frames, printing median translation (cm), median rotation (°) and the success rate at 5 cm/5°.
+It skips itself unless `DEIXIS_7SCENES_DIR` points at a scene directory, so CI stays green
+without shipping gigabytes:
+
+```sh
+# download one scene from https://www.microsoft.com/en-us/research/project/rgb-d-dataset-7-scenes/
+# (e.g. "chess"), unzip its seq-*.zip, then:
+DEIXIS_7SCENES_DIR=/path/to/chess ./gradlew :relocalization-bench:test --tests '*SevenScenesBenchmark*' -i
+```
+
+The pose parser and the convention flip are unit-tested without the data (`SevenScenesPoseTest`).
 
 ## Layer 3 — ARCore record & playback (planned, needs one capture)
 

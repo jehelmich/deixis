@@ -1,6 +1,5 @@
 package com.janhelmich.deixis.data.relocalization
 
-import android.util.Log
 import org.opencv.core.Mat
 import org.opencv.core.MatOfKeyPoint
 import org.opencv.features2d.ORB
@@ -42,12 +41,12 @@ class OrbFeatureExtractor(maxFeatures: Int = 1200) : FeatureExtractor {
             descriptors.get(0, 0, descBytes)
             return ExtractedFeatures(count, coords, descBytes, bytesPerRow)
         } catch (t: Throwable) {
-            Log.e(TAG, "ORB extraction failed", t)
+            logger.log(java.util.logging.Level.WARNING, "ORB extraction failed", t)
             return ExtractedFeatures.EMPTY
         } finally {
             image.release(); keypoints.release(); descriptors.release()
         }
     }
 
-    private companion object { const val TAG = "OrbFeatureExtractor" }
+    private companion object { val logger: java.util.logging.Logger = java.util.logging.Logger.getLogger("OrbFeatureExtractor") }
 }

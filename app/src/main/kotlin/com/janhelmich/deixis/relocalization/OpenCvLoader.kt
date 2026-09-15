@@ -1,4 +1,4 @@
-package com.janhelmich.deixis.data.relocalization
+package com.janhelmich.deixis.relocalization
 
 import android.util.Log
 import org.opencv.android.OpenCVLoader

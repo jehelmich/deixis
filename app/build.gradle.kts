@@ -100,9 +100,9 @@ dependencies {
     implementation(libs.sceneview.ar)
     implementation(libs.arcore)
 
-    // Offline relocalization (feature/offline-relocalization): ORB + PnP for rebuilding a
-    // saved room without Cloud Anchors. The math and map format are pure Kotlin; only the
-    // feature extractor touches OpenCV's native code.
+    // Offline relocalization (feature/offline-relocalization): the pure module, plus the
+    // Android build of OpenCV that provides its native code at runtime on the device.
+    implementation(project(":relocalization"))
     implementation(libs.opencv)
     implementation(libs.kotlin.math)
 

@@ -25,6 +25,8 @@ ktor = "3.5.2"
 sceneview = "4.35.0"
 # Offline relocalization: ORB features, descriptor matching and solvePnPRansac.
 opencv = "4.14.0"
+# Desktop OpenCV (same org.opencv.* API, with mac/linux/win natives) for the off-device bench.
+opencvDesktop = "4.9.0-0"
 # Pinned directly (also pulled in transitively by SceneView) for the relocalization math.
 kotlinMath = "1.8.0"
 # SceneView 4.35 declares ARCore 1.54; pin the current release explicitly.
@@ -65,6 +67,7 @@ ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref =
 sceneview-ar = { group = "io.github.sceneview", name = "arsceneview", version.ref = "sceneview" }
 arcore = { group = "com.google.ar", name = "core", version.ref = "arcore" }
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" }
+opencv-desktop = { group = "org.openpnp", name = "opencv", version.ref = "opencvDesktop" }
 kotlin-math = { group = "dev.romainguy", name = "kotlin-math", version.ref = "kotlinMath" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -76,5 +79,6 @@ androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiaut
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
