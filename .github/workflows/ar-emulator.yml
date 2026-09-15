@@ -1,0 +1,66 @@
+name: AR on the emulator
+
+# Runs the on-device placement test against ARCore in the Android Emulator's virtual scene.
+# Kept out of ci.yml: it needs an x86_64 emulator with KVM, the x86 build of Google Play
+# Services for AR sideloaded, and about ten minutes. The test skips itself (not fails) when
+# ARCore starts but never tracks a plane, so a red run here means a real app problem.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays, 06:00 UTC
+
+env:
+  ARCORE_VERSION: 1.56.0
+  API_LEVEL: 30
+
+jobs:
+  placement:
+    name: Place a marker in the virtual scene
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Fetch Google Play Services for AR (emulator build)
+        run: |
+          curl -sSL -o arcore.apk \
+            "https://github.com/google-ar/arcore-android-sdk/releases/download/${ARCORE_VERSION}/Google_Play_Services_for_AR_${ARCORE_VERSION}_x86_for_emulator.apk"
+          ls -la arcore.apk
+
+      - name: Run the placement test
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          # VirtualScene is the rendered room ARCore can track; swiftshader keeps it headless.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back virtualscene
+          disable-animations: true
+          script: |
+            adb install -r arcore.apk
+            adb shell dumpsys package com.google.ar.core | grep -m1 versionName
+            ./gradlew connectedDebugAndroidTest
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ar-emulator-reports
+          path: |
+            app/build/reports/androidTests/connected
+            app/build/outputs/androidTest-results/connected
+          if-no-files-found: ignore

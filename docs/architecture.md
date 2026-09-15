@@ -112,6 +112,19 @@ death — ARCore anchors belong to their session.
 AR card so the two cannot drift apart. `SettingsScreen` edits a draft and saves on demand;
 "Test connection" pings HA and counts usable entities without saving anything.
 
+## Tests
+
+JVM unit tests under `app/src/test` cover everything below the UI: the simulated home
+(driven by `advance()` with a seeded `Random`), the Home Assistant entity mapping, the HTTP
+client against Ktor's `MockEngine`, and the polling repository's success, failure and
+command paths.
+
+`app/src/androidTest/ArPlacementTest` is the one end-to-end check, run with UiAutomator
+against a real ARCore session: it launches the app, arms "Add marker", taps the screen
+centre until a tap lands on a tracked plane, binds the marker to a simulated device and
+switches to Use mode. It `assumeTrue`-skips where ARCore is unavailable or never tracks a
+plane, so it can be part of any run without turning environment problems into red builds.
+
 ## Build
 
 Kotlin 2.4 via AGP 9's built-in Kotlin (no `kotlin-android` plugin), Compose compiler and

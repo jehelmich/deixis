@@ -90,6 +90,7 @@ SDK with `local.properties` (`sdk.dir=…`) or `ANDROID_HOME`.
 ./gradlew lintDebug testDebugUnitTest    # what CI runs
 ./gradlew assembleDebug                  # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug                   # onto a connected device
+./gradlew connectedDebugAndroidTest      # the AR placement test, on that device
 ```
 
 No Android Studio is needed, though it opens the project fine.
@@ -101,6 +102,13 @@ University work from 2019, rewritten in September 2026. What is and is not verif
 - **Builds, lints clean and passes its unit tests on every push** (see the badge). The
   simulated backend, the Home Assistant entity mapping, the HTTP client and the polling
   repository are all covered; the last two against a mock server.
+- **One on-device test** (`ArPlacementTest`) drives the real UI over ARCore: add a marker,
+  tap until it lands on a plane, bind it, switch modes. It passes on the phone below in
+  about twelve seconds, and skips itself where ARCore cannot track. A separate weekly
+  workflow tries it in the emulator's virtual scene on an x86_64 runner; I could not
+  reproduce that locally — Emulator 37 on Apple Silicon exposes its camera as ID `10`, and
+  the arm64 ARCore build only looks for `0` — so treat that job as an experiment until it
+  has gone green.
 - **AR interaction has been tried on one phone** (Galaxy Z Flip6, Android 16, ARCore 1.56):
   placing on a desk, naming and binding markers, selecting, toggling from the floating card,
   drag / twist / pinch and mode switching all work. Not yet checked: vertical surfaces, several devices at once, Home Assistant
