@@ -16,8 +16,10 @@ android {
         // ARCore itself supports 24; SceneView's Filament build and the Compose stack want 28.
         minSdk = 28
         targetSdk = 37
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        // Experimental: on-device visual re-discovery anchoring (docs/anchoring.md). Works end to
+        // end on a Galaxy Z Flip6; still jittery, ORB-only. See the release notes.
+        versionName = "2.1.0-experimental.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
