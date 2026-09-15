@@ -95,8 +95,9 @@ class ArViewModel(private val repository: StateFlow<SmartHomeRepository>) : View
         return true
     }
 
+    /** Make [placementId] the one marker that takes edit gestures; tapping it again keeps it. */
     fun select(placementId: String?) {
-        _selectedId.update { if (it == placementId) null else placementId }
+        _selectedId.value = placementId
     }
 
     fun deselect() {

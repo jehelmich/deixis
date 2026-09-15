@@ -33,6 +33,13 @@ fun SceneScope.DeviceGeometry(kind: DeviceKind?, state: DeviceState) {
     }
 }
 
+/** A flat ring on the surface under the selected marker, so it is obvious which one gestures act on. */
+@Composable
+fun SceneScope.SelectionRing() {
+    val ring = rememberColorMaterial(Palette.Marker, metallic = 0f, roughness = 0.9f)
+    CylinderNode(radius = 0.075f, height = 0.003f, position = Position(y = 0.0015f), materialInstance = ring)
+}
+
 /** A marker that has not been assigned a device yet: a pin, so it reads as "something goes here". */
 @Composable
 private fun SceneScope.MarkerGeometry() {

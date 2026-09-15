@@ -66,11 +66,14 @@ is even configured.
 - **Placing.** "Add marker" arms `placing`. A tap on empty space runs `surfaceHit()` — the
   first hit on a tracked plane, inside its polygon, the same rule the 2019 code used for its
   crosshair — and `ArViewModel.place()` turns the hit into an unbound anchor.
-- **Configuring.** In Edit mode the selected marker opens `PlacementSheet`: name, device
-  dropdown, remove. A 2D sheet rather than a 3D card because SceneView's card window is
-  `FLAG_NOT_FOCUSABLE` and can never take a keyboard.
 - **Selecting.** The shapes are touchable; `Node.placementId()` walks up from whatever was
-  hit to the tagged anchor.
+  hit to the tagged anchor. Selection is sticky — a tap selects, a tap on empty space
+  deselects — and the selected marker gets a ring on the surface. In Edit mode only the
+  selected marker is editable, so gestures never grab the wrong one.
+- **Configuring.** In Edit mode the selected marker shows `PlacementPanel`: name, device
+  dropdown, remove. A 2D panel because SceneView's card window is `FLAG_NOT_FOCUSABLE` and
+  can never take a keyboard, and deliberately not modal so the marker stays draggable while
+  it is open.
 - **Editing.** SceneView's own node gestures, split across two nodes. `AnchorNode` rewrites
   its pose — rotation included — from ARCore on every tracked frame, so it is only
   position-editable: `moveHitTest` re-runs `surfaceHit()` so a dragged device stays on a

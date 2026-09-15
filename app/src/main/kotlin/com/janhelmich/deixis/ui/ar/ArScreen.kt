@@ -129,8 +129,8 @@ fun ArScreen(viewModel: ArViewModel) {
                     PlacedDevice(
                         placement = placement,
                         device = placement.deviceId?.let { id -> devices.firstOrNull { it.id == id } },
-                        showCard = mode == ArMode.USE && placement.id == selectedId,
-                        editing = mode == ArMode.EDIT,
+                        selected = placement.id == selectedId,
+                        mode = mode,
                         viewModel = viewModel,
                         cameraNode = cameraNode,
                         viewNodeManager = viewNodeManager,
@@ -143,6 +143,7 @@ fun ArScreen(viewModel: ArViewModel) {
             }
         }
 
+        val selected = placements.firstOrNull { it.id == selectedId }
         ArOverlay(
             mode = mode,
             onMode = viewModel::setMode,
@@ -151,20 +152,21 @@ fun ArScreen(viewModel: ArViewModel) {
             onTogglePlacing = viewModel::togglePlacing,
             hint = hintFor(mode, placing, placements.isEmpty(), trackingFailure),
             error = error,
+            panel = if (mode == ArMode.EDIT && selected != null) {
+                {
+                    // Configuration for the selected marker; the scene stays live behind it.
+                    PlacementPanel(
+                        placement = selected,
+                        devices = devices,
+                        onRename = { viewModel.rename(selected.id, it) },
+                        onBind = { viewModel.bind(selected.id, it) },
+                        onRemove = { viewModel.remove(selected.id) },
+                        onClose = viewModel::deselect,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
+                }
+            } else null,
         )
-
-        // Edit-mode configuration for the selected marker.
-        val selected = placements.firstOrNull { it.id == selectedId }
-        if (mode == ArMode.EDIT && selected != null) {
-            PlacementSheet(
-                placement = selected,
-                devices = devices,
-                onRename = { viewModel.rename(selected.id, it) },
-                onBind = { viewModel.bind(selected.id, it) },
-                onRemove = { viewModel.remove(selected.id) },
-                onDismiss = viewModel::deselect,
-            )
-        }
     }
 }
 
@@ -172,8 +174,8 @@ fun ArScreen(viewModel: ArViewModel) {
 private fun ARSceneScope.PlacedDevice(
     placement: Placement,
     device: Device?,
-    showCard: Boolean,
-    editing: Boolean,
+    selected: Boolean,
+    mode: ArMode,
     viewModel: ArViewModel,
     cameraNode: ARCameraNode,
     viewNodeManager: ViewNode.WindowManager,
@@ -183,6 +185,8 @@ private fun ARSceneScope.PlacedDevice(
     val state = device?.let { states[it.id] } ?: DeviceState.Unavailable
     val label = placement.label.ifBlank { device?.name ?: "marker" }
     val handle = remember { AnchorHandle() }
+    // Only the selected marker takes gestures, and only while arranging the room.
+    val editable = mode == ArMode.EDIT && selected
 
     AnchorNode(
         anchor = placement.anchor,
@@ -200,13 +204,15 @@ private fun ARSceneScope.PlacedDevice(
             moveHitTest = { frame, event -> surfaceHit(frame, event) }
         },
     ) {
-        // `apply` runs once; editability follows the mode from then on.
-        LaunchedEffect(editing) { handle.anchor?.isEditable = editing }
+        // `apply` runs once; editability follows selection and mode from then on.
+        LaunchedEffect(editable) { handle.anchor?.isEditable = editable }
+
+        if (selected) SelectionRing()
 
         // The body owns rotation and scale. Drags on it bubble up to the anchor because it is
         // not position-editable; twists and pinches stop here.
         Node(
-            isEditable = editing,
+            isEditable = editable,
             apply = {
                 isPositionEditable = false
                 editableScaleRange = 0.5f..3f
@@ -215,7 +221,7 @@ private fun ARSceneScope.PlacedDevice(
             DeviceGeometry(device?.kind, state)
         }
 
-        if (showCard) {
+        if (selected && mode == ArMode.USE) {
             ViewNode(
                 windowManager = viewNodeManager,
                 unlit = true,
@@ -264,7 +270,7 @@ private fun hintFor(
     trackingFailure != null -> trackingFailure.userMessage
     placing -> "Tap a surface to put a marker there"
     mode == ArMode.EDIT && nothingPlaced -> "Add a marker where a device lives, then tell it which one"
-    mode == ArMode.EDIT -> "Tap a marker to name it, assign a device, or remove it"
+    mode == ArMode.EDIT -> "Tap a marker to select it"
     nothingPlaced -> "Switch to Edit to place devices"
     else -> "Tap a device to control it"
 }
@@ -288,6 +294,7 @@ private fun ArOverlay(
     onTogglePlacing: () -> Unit,
     hint: String,
     error: String?,
+    panel: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(vertical = 12.dp),
@@ -325,8 +332,9 @@ private fun ArOverlay(
             }
         }
 
-        if (mode == ArMode.EDIT) {
-            FilterChip(
+        when {
+            panel != null -> panel()
+            mode == ArMode.EDIT -> FilterChip(
                 selected = placing,
                 onClick = onTogglePlacing,
                 label = { Text(if (placing) "Cancel" else "Add marker") },
