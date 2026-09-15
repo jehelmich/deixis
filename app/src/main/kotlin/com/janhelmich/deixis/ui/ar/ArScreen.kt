@@ -1,5 +1,6 @@
 package com.janhelmich.deixis.ui.ar
 
+import android.util.Log
 import android.view.MotionEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
+import com.google.ar.core.Plane
 import com.google.ar.core.TrackingFailureReason
 import com.google.ar.core.TrackingState
 import com.janhelmich.deixis.domain.Device
@@ -53,6 +55,8 @@ import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberOnGestureListener
 import io.github.sceneview.rememberViewNodeManager
+
+private const val TAG = "DeixisAR"
 
 /** How wide the floating card should appear in the room, in metres. */
 private const val CARD_WIDTH_METRES = 0.30f
@@ -107,11 +111,14 @@ fun ArScreen(viewModel: ArViewModel) {
             onGestureListener = rememberOnGestureListener(
                 onSingleTapConfirmed = { event: MotionEvent, node ->
                     val tapped = node?.placementId()
+                    Log.d(TAG, "tap: node=${node?.let { it::class.simpleName }} placement=$tapped")
                     when {
                         tapped != null -> viewModel.select(tapped)
                         viewModel.pendingDeviceId.value != null -> {
                             val frame = latestFrame ?: return@rememberOnGestureListener
-                            surfaceHit(frame, event)?.let { viewModel.place(it.createAnchor()) }
+                            val hit = surfaceHit(frame, event)
+                            Log.d(TAG, "place: " + (hit?.let { "${(it.trackable as Plane).type} at %.2f m".format(it.distance) } ?: "no surface"))
+                            hit?.let { viewModel.place(it.createAnchor()) }
                         }
                         else -> viewModel.select(null)
                     }
@@ -168,6 +175,10 @@ private fun ARSceneScope.PlacedDevice(
 
     AnchorNode(
         anchor = placement.anchor,
+        // ARCore pauses anchors for a few seconds whenever it re-evaluates their plane; keep
+        // the device where it was last seen rather than blinking it out.
+        visibleTrackingStates = setOf(TrackingState.TRACKING, TrackingState.PAUSED),
+        onTrackingStateChanged = { Log.d(TAG, "${device.name}: anchor $it") },
         apply = {
             handle.node = this
             name = PLACEMENT_NAME_PREFIX + placement.id
@@ -188,12 +199,17 @@ private fun ARSceneScope.PlacedDevice(
                 position = Position(y = device.kind.cardLiftMetres),
                 scale = Scale(cardScale),
                 apply = {
-                    // Face the camera every frame so the card is readable from anywhere.
                     onFrame = { _ ->
+                        // Face the camera every frame so the card is readable from anywhere.
                         val toCard = worldPosition - cameraNode.worldPosition
                         if (toCard.x * toCard.x + toCard.y * toCard.y + toCard.z * toCard.z > 1e-6f) {
                             lookTowards(lookDirection = toCard)
                         }
+                        // The card is drawn into its texture from the hidden window's
+                        // dispatchDraw, which a hardware-accelerated window only re-runs when
+                        // the container itself is dirty — a child recomposing is not enough, so
+                        // a flipped switch would never show. Invalidate it every frame.
+                        layout.invalidate()
                     }
                 },
             ) {

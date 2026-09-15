@@ -19,7 +19,9 @@ import io.github.sceneview.math.Size
  * A device's 3D body, built from primitives so the repository needs no model assets and the
  * shapes can react to state — a bulb glows, a plug's LED turns green.
  *
- * All sizes are metres; every shape rests on the anchor's surface (y = 0).
+ * All sizes are metres; every shape rests on the anchor's surface (y = 0). The shapes stay
+ * touchable: a tap on one is resolved to the owning anchor by [placementId], and drag/twist
+ * gestures bubble up to the anchor node because the shapes themselves are not editable.
  */
 @Composable
 fun SceneScope.DeviceGeometry(kind: DeviceKind, state: DeviceState) {
@@ -45,13 +47,11 @@ private fun SceneScope.PlugGeometry(state: DeviceState.Plug?) {
         size = Size(0.08f, 0.045f, 0.08f),
         position = Position(y = 0.0225f),
         materialInstance = body,
-        apply = { isTouchable = false },
     )
     SphereNode(
         radius = 0.006f,
         position = Position(x = 0.028f, y = 0.045f, z = 0.028f),
         materialInstance = led,
-        apply = { isTouchable = false },
     )
 }
 
@@ -67,11 +67,11 @@ private fun SceneScope.LightGeometry(state: DeviceState.Light?) {
         roughness = 0.2f,
     )
     CylinderNode(radius = 0.035f, height = 0.015f, position = Position(y = 0.0075f),
-        materialInstance = metal, apply = { isTouchable = false })
+        materialInstance = metal)
     CylinderNode(radius = 0.006f, height = 0.13f, position = Position(y = 0.08f),
-        materialInstance = metal, apply = { isTouchable = false })
+        materialInstance = metal)
     SphereNode(radius = 0.045f, position = Position(y = 0.19f),
-        materialInstance = glass, apply = { isTouchable = false })
+        materialInstance = glass)
 }
 
 @Composable
@@ -79,9 +79,9 @@ private fun SceneScope.SensorGeometry(state: DeviceState.Sensor?) {
     val body = rememberColorMaterial(if (state == null) Palette.Fault else Palette.Body, roughness = 0.7f)
     val antenna = rememberColorMaterial(Palette.Metal, metallic = 0.8f, roughness = 0.4f)
     CubeNode(size = Size(0.06f, 0.02f, 0.04f), position = Position(y = 0.01f),
-        materialInstance = body, apply = { isTouchable = false })
+        materialInstance = body)
     CylinderNode(radius = 0.003f, height = 0.05f, position = Position(x = 0.02f, y = 0.045f),
-        materialInstance = antenna, apply = { isTouchable = false })
+        materialInstance = antenna)
 }
 
 /**

@@ -98,10 +98,13 @@ University work from 2019, rewritten in September 2026. What is and is not verif
 - **Builds, lints clean and passes its unit tests on every push** (see the badge). The
   simulated backend, the Home Assistant entity mapping, the HTTP client and the polling
   repository are all covered; the last two against a mock server.
-- **AR interaction has not been exercised on hardware yet.** The rewrite was done without
-  an ARCore device to hand; the node tree, gesture wiring and card scaling follow SceneView's
-  own samples, but nothing here has been tapped on a real phone. Expect the feel — card size,
-  lift heights, tap targets — to want tuning.
+- **AR interaction has been tried on one phone** (Galaxy Z Flip6, Android 16, ARCore 1.56):
+  placing on a desk, selecting, toggling from the floating card, dragging and mode switching
+  all work. Not yet checked: vertical surfaces, several devices at once, Home Assistant
+  against a live instance, and anything other than that one device. Two things found on the
+  first run are documented in the code — SceneView `ViewNode`s need an explicit per-frame
+  invalidate to show state changes, and ARCore pauses anchors often enough that a paused
+  anchor has to stay visible.
 - **Home Assistant support targets the 2019 thesis hardware**: TP-Link plugs that report
   power on the `switch` entity itself. Newer integrations put those readings on separate
   `sensor.*` entities, which the plug card then shows as "—". Lights and climate sensors
